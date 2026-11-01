@@ -110,6 +110,28 @@ def _ask_compat(name, url, key, model, prompt, json_mode):
         raise RuntimeError(f"{type(e).__name__}: {e} | {info}")
 
 
+def groq_models(key):
+    """Ask Groq which chat models this key can use, best first."""
+    import requests
+    try:
+        r = requests.get("https://api.groq.com/openai/v1/models", headers={"Authorization": "Bearer " + key}, timeout=30)
+        ids = [m["id"] for m in r.json().get("data", []) if m.get("active", True)]
+        print("Groq models available:", ids, flush=True)
+    except Exception as e:
+        print("Could not list Groq models:", e, flush=True)
+        ids = []
+    skip = ("whisper", "guard", "tts", "playai", "orpheus", "embed", "safeguard", "distil", "compound")
+    ids = [i for i in ids if not any(k in i.lower() for k in skip)]
+    prefs = ("gpt-oss-120b", "llama-3.3-70b", "70b", "120b", "qwen", "kimi", "gpt-oss-20b", "llama", "gemma", "mixtral")
+    def rank(i):
+        for n, k in enumerate(prefs):
+            if k in i.lower():
+                return n
+        return len(prefs)
+    ids.sort(key=rank)
+    return ids[:4] or ["llama-3.3-70b-versatile"]
+
+
 def llm():
     rule = (f"Topic: {TOPIC}." if TOPIC else
             "Pick ONE topic yourself from this random category: " + random.choice(
@@ -119,7 +141,7 @@ def llm():
     env = os.environ.get
     attempts = []
     if env("GROQ_API_KEY"):
-        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant"):
+        for model in groq_models(env("GROQ_API_KEY")):
             for jm in (True, False):
                 attempts.append((f"groq {model} json={jm}", lambda model=model, jm=jm: _ask_compat(
                     "groq", "https://api.groq.com/openai/v1/chat/completions", env("GROQ_API_KEY"), model, prompt, jm)))
