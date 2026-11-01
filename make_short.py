@@ -94,25 +94,54 @@ def _ask_gemini(prompt):
         raise RuntimeError(f"{type(e).__name__}: {e} | {info}")
 
 
+def _ask_compat(name, url, key, model, prompt, json_mode):
+    """Any OpenAI-compatible chat endpoint (Groq, OpenRouter, GitHub legacy)."""
+    import requests
+    payload = {"model": model, "temperature": 0.9, "messages": [{"role": "user", "content": prompt}]}
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    r = requests.post(url, json=payload, timeout=120, headers={"Authorization": "Bearer " + key})
+    info = f"HTTP {r.status_code} ct={r.headers.get('content-type')} body={r.text[:300]!r}"
+    if r.status_code != 200:
+        raise RuntimeError(info)
+    try:
+        return _extract_json(r.json()["choices"][0]["message"]["content"])
+    except Exception as e:
+        raise RuntimeError(f"{type(e).__name__}: {e} | {info}")
+
+
 def llm():
     rule = (f"Topic: {TOPIC}." if TOPIC else
             "Pick ONE topic yourself from this random category: " + random.choice(
                 ["animals", "the human body", "space", "history", "ocean", "insects", "physics", "food science", "plants", "geology"]) +
             ". Choose something surprising that most people do not know.")
     prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none")
+    env = os.environ.get
     attempts = []
-    if os.environ.get("GEMINI_API_KEY"):
+    if env("GROQ_API_KEY"):
+        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant"):
+            for jm in (True, False):
+                attempts.append((f"groq {model} json={jm}", lambda model=model, jm=jm: _ask_compat(
+                    "groq", "https://api.groq.com/openai/v1/chat/completions", env("GROQ_API_KEY"), model, prompt, jm)))
+    if env("OPENROUTER_API_KEY"):
+        for model in ("meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-27b-it:free", "mistralai/mistral-small-3.2-24b-instruct:free"):
+            attempts.append((f"openrouter {model}", lambda model=model: _ask_compat(
+                "openrouter", "https://openrouter.ai/api/v1/chat/completions", env("OPENROUTER_API_KEY"), model, prompt, False)))
+    if env("GEMINI_API_KEY"):
         attempts.append(("gemini", lambda: _ask_gemini(prompt)))
-    for model in dict.fromkeys([MODEL, "openai/gpt-4.1-mini", "openai/gpt-4o-mini"]):
-        for jm in (True, False):
-            attempts.append((f"github {model} json_mode={jm}", lambda model=model, jm=jm: _ask_github(prompt, model, jm)))
+    if env("GITHUB_TOKEN"):
+        attempts.append(("github-legacy gpt-4o-mini", lambda: _ask_compat(
+            "github", "https://models.inference.ai.azure.com/chat/completions", env("GITHUB_TOKEN"), "gpt-4o-mini", prompt, False)))
+        attempts.append(("github gpt-4.1-mini", lambda: _ask_github(prompt, "openai/gpt-4.1-mini", False)))
+    if not attempts:
+        raise SystemExit("No LLM key found. Add a repo secret GROQ_API_KEY (free at console.groq.com).")
     errors = []
     for name, fn in attempts:
         try:
             return fn()
         except Exception as e:
             errors.append(f"{name}: {e}")
-            print("LLM attempt failed ->", errors[-1], flush=True)
+            print("LLM attempt failed ->", errors[-1][:500], flush=True)
     raise SystemExit("LLM FAILED. See the 'LLM attempt failed' lines above for the raw server reply.")
 
 
