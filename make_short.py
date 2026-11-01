@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One run -> a finished 9:16 Short (video + title/description). Free tools only.
 LLM: GitHub Models (uses the workflow's GITHUB_TOKEN). Voice: edge-tts. Render: paper-doc engine + ffmpeg."""
-import asyncio, json, os, random, re, subprocess, sys, urllib.request
+import asyncio, json, os, random, re, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -59,19 +59,29 @@ def llm():
             "Pick ONE topic yourself from this random category: " + random.choice(
                 ["animals", "the human body", "space", "history", "ocean", "insects", "physics", "food science", "plants", "geology"]) +
             ". Choose something surprising that most people do not know.")
-    body = json.dumps({"model": MODEL, "temperature": 0.9, "response_format": {"type": "json_object"},
-                       "messages": [{"role": "user", "content": PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none")}]}).encode()
-    req = urllib.request.Request("https://models.github.ai/inference/chat/completions", data=body, headers={
-        "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"})
-    last = None
-    for _ in range(3):
-        try:
-            txt = json.load(urllib.request.urlopen(req, timeout=120))["choices"][0]["message"]["content"]
-            return json.loads(re.sub(r"^```(?:json)?|```$", "", txt.strip()).strip())
-        except Exception as e:
-            last = e
-    raise SystemExit(f"LLM call failed: {last}")
+    prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none")
+    models = [MODEL] + [m for m in ("openai/gpt-4.1-mini", "openai/gpt-4o-mini", "openai/gpt-4.1") if m != MODEL]
+    errors = []
+    for model in models:
+        for use_json_mode in (True, False):
+            payload = {"model": model, "temperature": 0.9, "messages": [{"role": "user", "content": prompt}]}
+            if use_json_mode:
+                payload["response_format"] = {"type": "json_object"}
+            req = urllib.request.Request("https://models.github.ai/inference/chat/completions", data=json.dumps(payload).encode(), headers={
+                "Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"})
+            try:
+                txt = json.load(urllib.request.urlopen(req, timeout=120))["choices"][0]["message"]["content"]
+                m = re.search(r"\{.*\}", txt, re.S)
+                return json.loads(m.group(0))
+            except urllib.error.HTTPError as e:
+                body = e.read().decode(errors="replace")[:400]
+                errors.append(f"{model} json_mode={use_json_mode}: HTTP {e.code} {body}")
+            except Exception as e:
+                errors.append(f"{model} json_mode={use_json_mode}: {type(e).__name__} {e}")
+            print("LLM attempt failed:", errors[-1], flush=True)
+    raise SystemExit("LLM FAILED. Attempts:\n" + "\n".join(errors) +
+                     "\nFix: repo Settings > Actions > General > Workflow permissions, and make sure GitHub Models is enabled for your account.")
 
 
 def clean(s, n):
@@ -115,9 +125,24 @@ def element(p, dark):
     return {**base, "type": "sparkle", "n": 14, "r": 380}
 
 
-async def tts(text, path):
+async def _edge(text, path):
     import edge_tts
     await edge_tts.Communicate(text, VOICE, rate="+4%").save(str(path))
+
+
+def tts(text, path):
+    try:
+        asyncio.run(_edge(text, path))
+        if Path(path).stat().st_size > 1000:
+            return
+        raise RuntimeError("edge-tts produced an empty file")
+    except Exception as e:
+        print("edge-tts failed, falling back to gTTS:", type(e).__name__, e, flush=True)
+    try:
+        from gtts import gTTS
+        gTTS(text=text, lang="en").save(str(path))
+    except Exception as e:
+        raise SystemExit(f"TTS FAILED (edge-tts and gTTS): {type(e).__name__} {e}")
 
 
 def duration(p):
@@ -143,7 +168,7 @@ def main():
             sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(n), str(wav)])
         else:
             mp3 = WORK / f"seg{i}.mp3"
-            asyncio.run(tts(s["say"], mp3))
+            tts(s["say"], mp3)
             sh(["ffmpeg", "-v", "error", "-y", "-i", str(mp3), "-ar", "44100", "-ac", "2", str(wav)])
         wavs.append(wav); durs.append(duration(wav))
     lst = ["file 'lead.wav'"]
