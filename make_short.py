@@ -5,6 +5,10 @@ import asyncio, json, os, random, re, subprocess, sys, urllib.error, urllib.requ
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import anim
+try:
+    import icons
+except Exception:
+    icons = None
 
 ROOT = Path(__file__).resolve().parent
 WORK, OUT = ROOT / "work", ROOT / "out"
@@ -30,7 +34,7 @@ Each sentence is shown as an ANIMATED SCENE built from a fixed library, so choos
  "segments": [
   {{"say": "one spoken sentence, max 14 words, no emojis",
     "scene": "ONE of: {scenes}",
-    "objects": ["1-3 of: {objects}"],
+    "objects": ["1-3 concrete things to SHOW: plain English nouns like octopus, tomato, dna, castle, microscope, cannon, bridge, vaccine (about 10,000 pictures exist) or one emoji; hand-animated specials: {objects}"],
     "extras": ["0-2 of: {extras}"],
     "camera": "ONE of: {cameras}",
     "big_text": "optional key number or word shown huge, max 12 chars, e.g. 100°C (empty string if none)"}}
@@ -38,19 +42,20 @@ Each sentence is shown as an ANIMATED SCENE built from a fixed library, so choos
 Rules: 9 to 12 segments, 90-115 spoken words in total. Segment 1 is a hook with the strangest fact first;
 the last segment is a twist that makes people share. Real, well documented facts only; no invented numbers.
 HOW TO PICK VISUALS: most segments should use a stage_* scene (stage_nature, stage_lab, stage_warm, stage_dark, stage_bright)
-plus 1-3 'objects' that show what the sentence is about (an animal sentence -> that animal; heat -> thermometer or fire;
-chemicals -> flask; speed -> stopwatch; a blast -> explosion; a clever idea -> lightbulb). Use a world scene (mountains, ocean,
+plus 1-3 'objects' that literally show what the sentence is about: name the actual thing (an octopus sentence -> octopus;
+a tomato sentence -> tomato; heat -> thermometer or fire; a vaccine -> syringe). Use specific nouns, never abstract words. Use a world scene (mountains, ocean,
 space, city, forest, desert, volcano, climb...) ONLY when the story is really set in that place, and then usually leave objects empty.
 Never use a scene that does not match the story (no mountains for an insect story). Vary the stage and camera between segments.
 Use big_text for the most surprising number in about half of the segments."""
 
-SAMPLE = {"topic": "Ketchup", "title": "Is ketchup a fruit?", "description": "Test.", "hashtags": ["#shorts"],
+SAMPLE = {"topic": "Octopus", "title": "The animal with three hearts", "description": "Test.", "hashtags": ["#shorts"],
  "facts_to_verify": [], "segments": [
- {"say": "Ketchup is made from a fruit, not a vegetable.", "scene": "stage_nature", "objects": ["ketchup", "tomato"], "extras": [], "camera": "zoom_in", "big_text": ""},
- {"say": "A tomato is botanically a berry, because it grows from a flower.", "scene": "stage_warm", "objects": ["tomato", "flower"], "extras": [], "camera": "none", "big_text": "BERRY"},
- {"say": "Scientists use the seeds inside to decide what counts as fruit.", "scene": "stage_lab", "objects": ["magnifier"], "extras": [], "camera": "pan_right", "big_text": ""},
- {"say": "Once, a famous court case argued the tomato was a vegetable.", "scene": "stage_dark", "objects": ["book", "trophy"], "extras": [], "camera": "zoom_in", "big_text": "1893"},
- {"say": "So the law says vegetable, but science says fruit.", "scene": "stage_bright", "objects": ["tomato", "question"], "extras": [], "camera": "zoom_out", "big_text": ""}]}
+ {"say": "An octopus has three hearts and blue blood.", "scene": "stage_dark", "objects": ["octopus", "heart"], "extras": [], "camera": "zoom_in", "big_text": "3 HEARTS"},
+ {"say": "Two hearts pump blood through its gills.", "scene": "stage_lab", "objects": ["gills", "water"], "extras": [], "camera": "pan_right", "big_text": ""},
+ {"say": "Its blood uses copper, so it turns blue.", "scene": "stage_bright", "objects": ["copper", "drop"], "extras": [], "camera": "none", "big_text": "BLUE"},
+ {"say": "It can squeeze through a gap the size of a coin.", "scene": "stage_nature", "objects": ["coin", "key"], "extras": [], "camera": "zoom_out", "big_text": ""},
+ {"say": "Scientists study its brain to build soft robots.", "scene": "stage_warm", "objects": ["brain", "robot", "microscope"], "extras": [], "camera": "pan_left", "big_text": ""},
+ {"say": "Even the tallest tower cannot hide from its eight arms.", "scene": "stage_dark", "objects": ["castle"], "extras": [], "camera": "zoom_in", "big_text": ""}]}
 
 
 def _extract_json(txt):
@@ -297,7 +302,7 @@ def main():
         vd = d + (LEAD if i == 0 else 0.0) + (TAIL if i == len(segs) - 1 else 0.0)
         anim.render_segment(spec, vd, out, vf_extra=caption_filters(s["say"], d - GAP, i, off))
         vids.append(out)
-        print(f"  segment {i + 1}/{len(segs)} ok ({spec['scene']}, {spec['cam']})", flush=True)
+        print(f"  segment {i + 1}/{len(segs)} ok ({spec['scene']}, {spec['cam']}, objects: {spec['objs']})", flush=True)
     (WORK / "vlist.txt").write_text("\n".join(f"file '{v.name}'" for v in vids))
     sh(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(WORK / "vlist.txt"), "-c", "copy", str(WORK / "video.mp4")])
 
@@ -316,7 +321,8 @@ def main():
     (OUT / "upload_info.txt").write_text(
         f"TITLE:\n{data.get('title','')}\n\nDESCRIPTION:\n{data.get('description','')}\n\n{tags}\n\n"
         "CHECK THESE FACTS BEFORE POSTING:\n" + "\n".join("- " + str(f) for f in data.get("facts_to_verify", [])) +
-        "\n\nANIMATION: generated by code (no third-party footage).\n")
+        "\n\nANIMATION: generated by code (no third-party footage).\n" +
+        ("\nCREDITS (paste into the description):\n" + icons.credit_line() + "\n" if icons and icons.credit_line() else ""))
     if not OFFLINE:
         with open(ROOT / "topics.txt", "a") as f:
             f.write(topic.strip() + "\n")
