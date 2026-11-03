@@ -26,13 +26,14 @@ jobs:
       - name: Install
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-dejavu-extra
-          pip install -U numpy pillow edge-tts gtts requests
+          sudo apt-get install -y ffmpeg fonts-dejavu-core fonts-dejavu-extra libcairo2
+          pip install -U numpy pillow edge-tts gtts requests cairosvg emoji
       - name: Make the Short
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           TOPIC: ${{ inputs.topic }}
           VOICE: ${{ inputs.voice }}
