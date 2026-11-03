@@ -13,6 +13,8 @@ VOICE = os.environ.get("VOICE", "en-US-GuyNeural")
 MODEL = os.environ.get("MODEL", "openai/gpt-4.1-mini")
 OFFLINE = os.environ.get("OFFLINE") == "1"
 GAP = 0.08            # tiny breath between sentences (no dead air)
+LEAD = 0.45           # music-only lead-in so the first word is never swallowed
+TAIL = 0.5            # short tail after the last word
 SPEED = 1.08          # voice speed-up for a punchier feel
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
@@ -42,15 +44,13 @@ space, city, forest, desert, volcano, climb...) ONLY when the story is really se
 Never use a scene that does not match the story (no mountains for an insect story). Vary the stage and camera between segments.
 Use big_text for the most surprising number in about half of the segments."""
 
-SAMPLE = {"topic": "Bombardier beetle", "title": "The beetle that shoots boiling acid", "description": "Test.", "hashtags": ["#shorts"],
+SAMPLE = {"topic": "Ketchup", "title": "Is ketchup a fruit?", "description": "Test.", "hashtags": ["#shorts"],
  "facts_to_verify": [], "segments": [
- {"say": "This tiny beetle can shoot boiling liquid from its body.", "scene": "stage_nature", "objects": ["beetle"], "extras": [], "camera": "zoom_in", "big_text": ""},
- {"say": "The spray is almost one hundred degrees Celsius.", "scene": "stage_warm", "objects": ["thermometer"], "extras": [], "camera": "none", "big_text": "100°C"},
- {"say": "Inside its body, two chemicals are kept apart until danger arrives.", "scene": "stage_lab", "objects": ["flask"], "extras": [], "camera": "pan_right", "big_text": ""},
- {"say": "When they mix, enzymes make them explode into hot spray.", "scene": "stage_dark", "objects": ["explosion"], "extras": ["shake"], "camera": "zoom_in", "big_text": ""},
- {"say": "It repeats this about five hundred times every second.", "scene": "stage_bright", "objects": ["stopwatch"], "extras": [], "camera": "zoom_out", "big_text": "500/SEC"},
- {"say": "Frogs and spiders learn quickly not to attack it.", "scene": "stage_nature", "objects": ["frog", "spider"], "extras": [], "camera": "pan_left", "big_text": ""},
- {"say": "Scientists study its design to build safer engines.", "scene": "stage_lab", "objects": ["magnifier", "gear"], "extras": [], "camera": "none", "big_text": ""}]}
+ {"say": "Ketchup is made from a fruit, not a vegetable.", "scene": "stage_nature", "objects": ["ketchup", "tomato"], "extras": [], "camera": "zoom_in", "big_text": ""},
+ {"say": "A tomato is botanically a berry, because it grows from a flower.", "scene": "stage_warm", "objects": ["tomato", "flower"], "extras": [], "camera": "none", "big_text": "BERRY"},
+ {"say": "Scientists use the seeds inside to decide what counts as fruit.", "scene": "stage_lab", "objects": ["magnifier"], "extras": [], "camera": "pan_right", "big_text": ""},
+ {"say": "Once, a famous court case argued the tomato was a vegetable.", "scene": "stage_dark", "objects": ["book", "trophy"], "extras": [], "camera": "zoom_in", "big_text": "1893"},
+ {"say": "So the law says vegetable, but science says fruit.", "scene": "stage_bright", "objects": ["tomato", "question"], "extras": [], "camera": "zoom_out", "big_text": ""}]}
 
 
 def _extract_json(txt):
@@ -241,15 +241,15 @@ def chunk_words(text, limit=15):
     return chunks or [text.upper()[:limit]]
 
 
-def caption_filters(text, dur, i):
+def caption_filters(text, dur, i, offset=0.0):
     chunks = chunk_words(text)
     total = sum(len(c) for c in chunks)
-    t, parts = 0.0, []
+    t, parts = offset, []
     for n, c in enumerate(chunks):
         d = dur * len(c) / total
         f = WORK / f"cap{i}_{n}.txt"
         f.write_text(c)
-        end = dur + 1 if n == len(chunks) - 1 else t + d
+        end = offset + dur + 1 if n == len(chunks) - 1 else t + d
         parts.append(f"drawtext=fontfile={FONT}:textfile={f}:fontsize=80:fontcolor=white:borderw=9:bordercolor=black"
                      f":x=(w-text_w)/2:y=h*0.66:enable='between(t,{t:.3f},{end:.3f})'")
         t += d
@@ -267,7 +267,7 @@ def main():
 
     # 1) voice, one clip per sentence, silence trimmed at both ends -> no dead air
     wavs, durs = [], []
-    trim = "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse"
+    trim = "silenceremove=start_periods=1:start_threshold=-55dB:start_silence=0.07,areverse,silenceremove=start_periods=1:start_threshold=-55dB:start_silence=0.07,areverse"
     for i, s in enumerate(segs):
         raw = WORK / f"seg{i}_raw.wav"
         if OFFLINE:
@@ -281,9 +281,11 @@ def main():
         wav = WORK / f"seg{i}.wav"
         sh(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", f"{trim},atempo={SPEED},apad=pad_dur={GAP}", str(wav)])
         wavs.append(wav); durs.append(duration(wav))
-    (WORK / "list.txt").write_text("\n".join(f"file '{w.name}'" for w in wavs))
+    for nm, sec in (("lead", LEAD), ("tail", TAIL)):
+        sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(sec), str(WORK / f"{nm}.wav")])
+    (WORK / "list.txt").write_text("\n".join(["file 'lead.wav'"] + [f"file '{w.name}'" for w in wavs] + ["file 'tail.wav'"]))
     sh(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(WORK / "list.txt"), "-c", "copy", str(WORK / "voice.wav")])
-    total = sum(durs)
+    total = sum(durs) + LEAD + TAIL
     print(f"Voice: {total:.1f}s", flush=True)
 
     # 2) one ANIMATED scene per sentence, captions burned in
@@ -291,7 +293,9 @@ def main():
     for i, (s, d) in enumerate(zip(segs, durs)):
         spec = anim.make_spec(s, i)
         out = WORK / f"v{i}.mp4"
-        anim.render_segment(spec, d, out, vf_extra=caption_filters(s["say"], d - GAP, i))
+        off = LEAD if i == 0 else 0.0
+        vd = d + (LEAD if i == 0 else 0.0) + (TAIL if i == len(segs) - 1 else 0.0)
+        anim.render_segment(spec, vd, out, vf_extra=caption_filters(s["say"], d - GAP, i, off))
         vids.append(out)
         print(f"  segment {i + 1}/{len(segs)} ok ({spec['scene']}, {spec['cam']})", flush=True)
     (WORK / "vlist.txt").write_text("\n".join(f"file '{v.name}'" for v in vids))
