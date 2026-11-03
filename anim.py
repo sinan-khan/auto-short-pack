@@ -643,11 +643,277 @@ def o_bolt(o, t):
     o.poly([(25, -150), (-70, 20), (-8, 20), (-38, 150), (80, -30), (14, -30), (60, -150)], (255, 225, 60)); o.poly([(22, -128), (-48, 12), (6, 12)], (255, 250, 190, 160))
 
 
+
+# ---------------------------------------------------------------- more objects: food, nature, things, people
+def arc_pts(cx, cy, r, a0, a1, n=24):
+    return [(cx + r * math.cos(a0 + (a1 - a0) * k / n), cy + r * math.sin(a0 + (a1 - a0) * k / n)) for k in range(n + 1)]
+
+
+def o_tomato(o, t):
+    w = 1 + 0.025 * math.sin(t * 3)
+    o.ell(0, 22, 108 * w, 98 / w, (222, 48, 40)); o.ell(-38, -8, 22, 34, (255, 140, 130, 150))
+    pts = []
+    for k in range(10):
+        r = 52 if k % 2 == 0 else 20; a = k / 10 * math.tau - math.pi / 2; pts.append((r * math.cos(a), -72 + r * 0.45 * math.sin(a)))
+    o.poly(pts, (60, 150, 60)); o.line([(0, -72), (6, -112)], (60, 120, 50), 0.07)
+
+
+def o_apple(o, t):
+    o.circ(-42, 20, 78, (220, 40, 50)); o.circ(42, 20, 78, (220, 40, 50)); o.ell(0, 40, 100, 80, (220, 40, 50))
+    o.ell(-45, 0, 14, 30, (255, 160, 160, 150)); o.line([(0, -50), (6, -110)], (100, 70, 40), 0.07)
+    sw = math.sin(t * 2) * 6
+    o.poly([(8, -92), (60 + sw, -128), (82 + sw, -96), (40, -80)], (80, 180, 70))
+
+
+def o_banana(o, t):
+    outer = arc_pts(0, -40, 150, 0.35, math.pi - 0.35); inner = arc_pts(0, -70, 120, math.pi - 0.45, 0.45)
+    o.poly(outer + inner, (255, 214, 50)); o.line(arc_pts(0, -55, 135, 0.5, math.pi - 0.5), (230, 180, 30), 0.03)
+    o.circ(outer[0][0], outer[0][1], 12, (110, 80, 40)); o.circ(outer[-1][0], outer[-1][1], 12, (110, 80, 40))
+
+
+def o_pizza(o, t):
+    o.poly([(-115, -80), (115, -80), (0, 135)], (255, 200, 70)); o.poly([(-120, -100), (120, -100), (120, -66), (-120, -66)], (214, 150, 70))
+    for dx, dy, r in ((-40, -30, 22), (36, -10, 22), (-4, 40, 20), (20, -52, 14)):
+        o.circ(dx, dy, r, (200, 50, 40))
+    for k in range(3):
+        o.line([(-20 + k * 22, 75 - k * 24), (-14 + k * 22, 108 - k * 30 - 4 * math.sin(t * 3 + k))], (255, 240, 190), 0.02)
+
+
+def o_burger(o, t):
+    o.ell(0, -62, 112, 62, (222, 150, 70)); o.ell(0, 62, 106, 34, (214, 140, 62))
+    o.poly([(-112, 8), (112, 8), (112, 36), (-112, 36)], (90, 52, 36)); o.poly([(-118, -8), (118, -8), (100, 12), (-100, 12)], (255, 205, 50))
+    o.line([(-114 + k * 19, 0 + (6 if k % 2 else -4)) for k in range(13)], (90, 190, 70), 0.06)
+    for dx, dy in ((-40, -80), (10, -92), (50, -70), (-8, -60)):
+        o.ell(dx, dy, 8, 4, (255, 240, 200))
+
+
+def o_coffee(o, t):
+    o.ell(0, 100, 130, 22, (235, 235, 240)); o.poly([(-80, -30), (80, -30), (64, 96), (-64, 96)], (245, 245, 250))
+    o.ell(0, -30, 80, 16, (110, 70, 40)); o.line(arc_pts(92, 26, 36, -1.6, 1.6), (245, 245, 250), 0.09)
+    for k in range(3):
+        pts = [(-30 + k * 30 + 12 * math.sin(t * 3 + q * 0.9 + k), -48 - q * 22) for q in range(6)]
+        o.line(pts, (255, 255, 255, 190), 0.035)
+
+
+def o_egg(o, t):
+    w = 1 + 0.02 * math.sin(t * 3)
+    o.ell(0, 20, 82 * w, 108, (248, 238, 214)); o.ell(0, -50, 62 * w, 64, (248, 238, 214)); o.ell(-26, 0, 14, 38, (255, 255, 255, 150))
+
+
+def o_ketchup(o, t):
+    o.poly([(-48, -40), (48, -40), (58, 120), (-58, 120)], (210, 36, 36)); o.poly([(-48, -40), (48, -40), (22, -92), (-22, -92)], (210, 36, 36))
+    o.poly([(-16, -92), (16, -92), (14, -130), (-14, -130)], (250, 250, 250)); o.poly([(-40, 10), (40, 10), (40, 78), (-40, 78)], (250, 250, 250))
+    o.circ(0, 44, 18, (210, 36, 36)); o.ell(-30, 20, 8, 44, (255, 140, 140, 120))
+    r = (t * 1.2) % 1; o.ell(0, -150 - r * 90 * 0, 11, 16, (200, 30, 30, int(255 * (1 - r)))) if False else None
+    o.circ(0, -138 - r * 110 + 0, 10, (200, 30, 30, int(255 * (1 - r * 0.6))))
+
+
+def o_tree(o, t):
+    sw = math.sin(t * 1.6) * 6
+    o.poly([(-18, 130), (18, 130), (14, 10), (-14, 10)], (110, 76, 46))
+    for dx, dy, r in ((-52, -10, 62), (52, -10, 62), (0, -62, 74), (-10, -20, 70)):
+        o.circ(dx + sw * 0.5, dy, r, (64, 158, 80))
+    for dx, dy in ((-30, -40), (30, -10), (0, -80)):
+        o.circ(dx + sw * 0.5, dy, 9, (220, 50, 50))
+
+
+def o_flower(o, t):
+    sw = math.sin(t * 2) * 5
+    o.line([(0, 130), (sw, 20)], (70, 150, 70), 0.06); o.poly([(0, 80), (60, 40), (66, 76)], (80, 170, 80))
+    for k in range(8):
+        a = k / 8 * math.tau + t * 0.5; o.circ(sw + 54 * math.cos(a), -20 + 54 * math.sin(a), 32, (255, 120, 170))
+    o.circ(sw, -20, 36, (255, 210, 60))
+
+
+def o_sun(o, t):
+    for k in range(12):
+        a = k / 12 * math.tau + t * 0.6; o.poly(rot([(-14, -110), (14, -110), (0, -155)], a), (255, 190, 40))
+    o.circ(0, 0, 96, (255, 214, 60)); o.circ(0, 0, 80, (255, 232, 110))
+
+
+def o_moon(o, t):
+    for k in range(5, 0, -1):
+        o.circ(0, 0, 100 + k * 18, (210, 220, 255, 14))
+    pts = arc_pts(0, 0, 105, -math.pi / 2, math.pi / 2) + arc_pts(-48, 0, 100, math.pi / 2, -math.pi / 2)
+    o.poly(pts, (245, 242, 220)); o.circ(36, -30, 9, (220, 215, 190)); o.circ(52, 28, 13, (220, 215, 190))
+
+
+def o_star(o, t):
+    sc = 1 + 0.07 * math.sin(t * 4); pts = []
+    for k in range(10):
+        r = (118 if k % 2 == 0 else 50) * sc; a = k / 10 * math.tau - math.pi / 2 + math.sin(t * 2) * 0.1; pts.append((r * math.cos(a), r * math.sin(a) + 8))
+    o.poly(pts, (255, 206, 40)); o.circ(-14, -10, 14, (255, 245, 170))
+
+
+def o_snowflake(o, t):
+    for k in range(6):
+        a = k / 6 * math.tau + t * 0.4; ca, sa = math.cos(a), math.sin(a)
+        o.line([(0, 0), (125 * ca, 125 * sa)], (200, 235, 255), 0.04)
+        for d in (50, 85):
+            o.line([(d * ca - 26 * sa, d * sa + 26 * ca), (d * ca, d * sa), (d * ca + 26 * sa, d * sa - 26 * ca)], (200, 235, 255), 0.03)
+
+
+def o_car(o, t):
+    b = math.sin(t * 9) * 2
+    o.poly([(-140, 40 + b), (-130, -10 + b), (-70, -20 + b), (-40, -70 + b), (50, -70 + b), (90, -20 + b), (140, -8 + b), (146, 40 + b)], (222, 52, 52))
+    o.poly([(-34, -58 + b), (-58, -18 + b), (-8, -18 + b), (-8, -58 + b)], (190, 225, 250)); o.poly([(6, -58 + b), (6, -18 + b), (76, -18 + b), (44, -58 + b)], (190, 225, 250))
+    for wx in (-82, 84):
+        o.circ(wx, 52 + b, 36, (30, 30, 36)); o.circ(wx, 52 + b, 18, (190, 195, 205))
+        a = t * 14; o.line([(wx + 18 * math.cos(a), 52 + b + 18 * math.sin(a)), (wx - 18 * math.cos(a), 52 + b - 18 * math.sin(a))], (90, 95, 105), 0.03)
+    for k in range(3):
+        o.circ(-160 - ((t * 120 + k * 40) % 100), 54 + 6 * k, 6 + k * 2, (230, 230, 230, int(150 - ((t * 120 + k * 40) % 100))))
+
+
+def o_plane(o, t):
+    tilt = math.sin(t * 1.5) * 0.08
+    pts = lambda p: rot(p, tilt)
+    o.poly(pts([(-150, 0), (-120, -20), (120, -20), (160, 0), (120, 20), (-120, 20)]), (240, 244, 250))
+    o.poly(pts([(-20, 0), (60, 0), (-40, 110), (-80, 110)]), (200, 206, 220)); o.poly(pts([(-20, -4), (60, -4), (-40, -100), (-80, -100)]), (215, 220, 232))
+    o.poly(pts([(-150, 0), (-130, -60), (-100, -60), (-100, 0)]), (222, 52, 52))
+    for k in range(5):
+        o.circ(pts([(-55 + k * 28, -6)])[0][0], pts([(-55 + k * 28, -6)])[0][1], 6, (110, 170, 230))
+    for k in range(6):
+        o.circ(-170 - ((t * 140 + k * 30) % 150), 4, 7 + k, (255, 255, 255, int(170 - ((t * 140 + k * 30) % 150))))
+
+
+def o_house(o, t):
+    o.poly([(-100, -10), (100, -10), (100, 110), (-100, 110)], (240, 205, 150)); o.poly([(-122, -6), (0, -100), (122, -6)], (200, 70, 60))
+    o.poly([(-22, 30), (22, 30), (22, 110), (-22, 110)], (120, 80, 50)); o.poly([(48, 22), (84, 22), (84, 58), (48, 58)], (170, 215, 250)); o.poly([(-84, 22), (-48, 22), (-48, 58), (-84, 58)], (170, 215, 250))
+    o.poly([(58, -88), (84, -88), (84, -40), (58, -52)], (150, 60, 50))
+    for k in range(4):
+        o.circ(72 + 10 * math.sin(t * 2 + k), -100 - ((t * 40 + k * 25) % 100), 8 + k * 3, (230, 230, 235, int(190 - k * 40)))
+
+
+def o_robot(o, t):
+    w = math.sin(t * 5) * 0.5
+    o.line([(0, -112), (0, -140)], (150, 160, 180), 0.04); o.circ(0, -146, 9, (255, 80, 80) if int(t * 3) % 2 else (255, 190, 190))
+    o.poly([(-70, -110), (70, -110), (70, -20), (-70, -20)], (170, 182, 205)); o.poly([(-58, -10), (58, -10), (58, 100), (-58, 100)], (140, 152, 178))
+    for sx in (-1, 1):
+        o.circ(sx * 30, -66, 17, (90, 240, 255)); o.circ(sx * 30, -66, 7, (20, 40, 70))
+        o.line([(sx * 58, 0), (sx * (96 + 10 * w), 40 + 20 * w * sx), (sx * (118 + 10 * w), 70 + 20 * w * sx)], (120, 132, 158), 0.06)
+    o.poly([(-34, -38), (34, -38), (34, -28), (-34, -28)], (60, 70, 100)); o.circ(0, 30, 16, (255, 190, 60))
+
+
+def o_phone(o, t):
+    o.poly([(-62, -140), (62, -140), (62, 140), (-62, 140)], (30, 34, 46)); o.poly([(-52, -118), (52, -118), (52, 118), (-52, 118)], (120, 180, 255))
+    for k in range(3):
+        p = clamp((t * 1.5 - k * 0.5) % 2.0, 0, 1)
+        o.poly([(-40, -90 + k * 60), (40 * p, -90 + k * 60), (40 * p, -62 + k * 60), (-40, -62 + k * 60)], (255, 255, 255, 230))
+    o.circ(0, 128, 5, (90, 94, 110))
+
+
+def o_laptop(o, t):
+    o.poly([(-120, -100), (120, -100), (120, 50), (-120, 50)], (60, 66, 84)); o.poly([(-108, -88), (108, -88), (108, 38), (-108, 38)], (20, 28, 44))
+    o.poly([(-150, 56), (150, 56), (170, 90), (-170, 90)], (190, 196, 210))
+    for k in range(5):
+        L = 70 + (k * 37) % 70; p = clamp((t * 0.8 - k * 0.2) % 1.6, 0, 1)
+        o.poly([(-92, -72 + k * 20), (-92 + L * p, -72 + k * 20), (-92 + L * p, -62 + k * 20), (-92, -62 + k * 20)], (110, 255, 160))
+
+
+def o_book(o, t):
+    f = math.sin(t * 2) * 6
+    o.poly([(-130, -80), (0, -60 + f), (0, 100), (-130, 80)], (250, 246, 232)); o.poly([(130, -80), (0, -60 + f), (0, 100), (130, 80)], (240, 236, 220))
+    o.poly([(-138, -86), (-130, -80), (-130, 90), (-138, 96)], (60, 100, 190)); o.poly([(138, -86), (130, -80), (130, 90), (138, 96)], (60, 100, 190))
+    for k in range(5):
+        o.line([(-110, -40 + k * 22), (-20, -26 + k * 22)], (170, 170, 180), 0.02); o.line([(110, -40 + k * 22), (20, -26 + k * 22)], (170, 170, 180), 0.02)
+
+
+def o_trophy(o, t):
+    for sx in (-1, 1):
+        o.line(arc_pts(sx * 92, -48, 36, -1.6 if sx < 0 else 1.6 + 3.14, 1.6 if sx < 0 else -1.6 + 3.14 + 0), (230, 170, 30), 0.06)
+    o.poly([(-82, -110), (82, -110), (60, 20), (20, 62), (-20, 62), (-60, 20)], (255, 205, 50)); o.poly([(-14, 62), (14, 62), (14, 108), (-14, 108)], (230, 170, 30))
+    o.poly([(-60, 108), (60, 108), (70, 134), (-70, 134)], (110, 70, 40)); o.ell(-34, -50, 12, 40, (255, 245, 170, 170))
+    sp = (t * 1.2) % 1; o.circ(60, -90 - sp * 30, 8 * (1 - sp), (255, 255, 255))
+
+
+def o_key(o, t):
+    a = math.sin(t * 2) * 0.15
+    P = lambda p: rot(p, a)
+    o.poly(P([(-20, -10), (150, -10), (150, 18), (-20, 18)]), (240, 190, 50)); o.poly(P([(90, 18), (110, 18), (110, 56), (90, 56)]), (240, 190, 50)); o.poly(P([(124, 18), (144, 18), (144, 44), (124, 44)]), (240, 190, 50))
+    pts = rot(arc_pts(-60, 4, 62, 0, math.tau, 30), a); o.poly(pts, (240, 190, 50)); o.poly(rot(arc_pts(-60, 4, 30, 0, math.tau, 24), a), (30, 40, 70) if False else (200, 150, 30))
+
+
+def o_crown(o, t):
+    o.poly([(-120, 70), (-120, -50), (-60, 10), (0, -80), (60, 10), (120, -50), (120, 70)], (255, 206, 50)); o.poly([(-120, 70), (120, 70), (120, 96), (-120, 96)], (230, 170, 30))
+    for dx, c in ((-120, (230, 50, 60)), (0, (60, 150, 240)), (120, (60, 200, 110))):
+        o.circ(dx, -58 if dx != 0 else -88, 13, c)
+    sp = (t * 1.3) % 1; o.circ(-70, -10 - sp * 30, 8 * (1 - sp), (255, 255, 255))
+
+
+def o_globe(o, t):
+    o.circ(0, 0, 112, (40, 110, 210))
+    for bx, by, r in ((-60, -30, 40), (30, 20, 46), (80, -40, 30), (-20, 70, 30)):
+        x = ((bx + 112 + t * 40) % 224) - 112; fade = clamp((112 - abs(x) - r * 0.4) / 40)
+        if fade > 0.05:
+            o.circ(x, by, r * (0.5 + 0.5 * fade), (70, 170, 90, int(255 * fade)))
+    o.circ(0, 0, 112, (255, 255, 255, 0)); o.circ(-36, -40, 30, (255, 255, 255, 45))
+    o.line(arc_pts(0, 0, 118, 0, math.tau, 40), (60, 70, 100), 0.03)
+
+
+def o_rocket(o, t):
+    sh = math.sin(t * 40) * 2; fl = 40 + 24 * math.sin(t * 30)
+    o.poly([(-22 + sh, 100), (22 + sh, 100), (sh, 100 + fl * 2.2)], (255, 140, 30)); o.poly([(-10 + sh, 100), (10 + sh, 100), (sh, 100 + fl * 1.4)], (255, 235, 120))
+    o.poly([(-34 + sh, 90), (34 + sh, 90), (34 + sh, -70), (-34 + sh, -70)], (238, 240, 248)); o.poly([(-34 + sh, -70), (34 + sh, -70), (sh, -150)], (224, 56, 56))
+    o.poly([(-34 + sh, 30), (-72 + sh, 100), (-34 + sh, 90)], (224, 56, 56)); o.poly([(34 + sh, 30), (72 + sh, 100), (34 + sh, 90)], (224, 56, 56)); o.circ(sh, -20, 17, (90, 170, 230))
+
+
+def o_tooth(o, t):
+    pts = [(-70, -80), (-30, -100), (0, -86), (30, -100), (70, -80), (82, -20), (60, 50), (56, 120), (30, 120), (14, 50), (-14, 50), (-30, 120), (-56, 120), (-60, 50), (-82, -20)]
+    o.poly(pts, (250, 250, 252)); o.ell(-34, -56, 12, 24, (255, 255, 255)); o.line([(-50, -70), (-20, -40)], (225, 232, 245), 0.03)
+    sp = (t * 1.2) % 1; o.circ(60, -70 - sp * 20, 9 * (1 - sp), (255, 255, 255)); o.circ(60, -70 - sp * 20, 3, (140, 200, 255))
+
+
+def o_eye(o, t):
+    bl = 1 if (t % 2.6) > 0.18 else 0.1; lx, ly = 22 * math.sin(t * 1.3), 8 * math.sin(t * 1.9)
+    o.poly(arc_pts(0, 0, 150, -2.3, -0.84, 20) if False else [(-140, 0), (-70, -70 * bl), (0, -86 * bl), (70, -70 * bl), (140, 0), (70, 70 * bl), (0, 86 * bl), (-70, 70 * bl)], (250, 250, 252))
+    if bl > 0.5:
+        o.circ(lx, ly, 52, (60, 140, 220)); o.circ(lx, ly, 26, (10, 12, 20)); o.circ(lx - 14, ly - 16, 10, (255, 255, 255))
+    o.line([(-140, 0), (-70, -70 * bl), (0, -86 * bl), (70, -70 * bl), (140, 0)], (60, 50, 60), 0.04)
+
+
+def o_dog(o, t):
+    pant = math.sin(t * 8) * 4
+    o.ell(-86, -20, 34, 66, (120, 80, 50)); o.ell(86, -20, 34, 66, (120, 80, 50))
+    o.circ(0, -10, 84, (220, 170, 110)); o.ell(0, 36, 50, 38, (245, 225, 190))
+    for sx in (-1, 1):
+        o.circ(sx * 34, -34, 13, (255, 255, 255)); o.circ(sx * 34, -34, 7, (20, 20, 20))
+    o.ell(0, 20, 20, 13, (30, 30, 36)); o.ell(0, 66 + pant, 16, 22 + pant, (240, 110, 130))
+    o.line([(0, 30), (0, 52), (-22, 62)], (90, 60, 40), 0.025); o.line([(0, 52), (22, 62)], (90, 60, 40), 0.025)
+
+
+def o_human(o, t):
+    w = math.sin(t * 5)
+    o.line([(-22, 40), (-26, 130)], (50, 60, 90), 0.1); o.line([(22, 40), (26, 130)], (50, 60, 90), 0.1)
+    o.poly([(-48, -50), (48, -50), (40, 60), (-40, 60)], (60, 130, 220))
+    o.line([(-46, -40), (-90, 10)], (60, 130, 220), 0.1); o.line([(46, -40), (90 + 8 * w, -90 + 14 * w), (104 + 12 * w, -128 + 10 * w)], (60, 130, 220), 0.1)
+    o.circ(104 + 12 * w, -132 + 10 * w, 12, (240, 200, 160)); o.circ(-90, 14, 12, (240, 200, 160))
+    o.circ(0, -92, 38, (240, 200, 160)); o.poly([(-38, -96), (38, -96), (30, -128), (-30, -128)], (70, 50, 40))
+    for sx in (-1, 1):
+        o.circ(sx * 14, -92, 4.5, (20, 20, 30))
+    o.line([(-12, -76), (0, -70), (12, -76)], (160, 70, 70), 0.025)
+
+
+def o_dinosaur(o, t):
+    st = math.sin(t * 6) * 6
+    o.poly([(-120, 30), (-170, 70), (-60, 56)], (80, 170, 90)); o.ell(0, 20, 100, 62, (90, 180, 100)); o.poly([(50, 0), (90, -90), (126, -96), (130, -60), (96, -40), (86, 14)], (90, 180, 100))
+    o.ell(116, -86, 36, 26, (90, 180, 100)); o.circ(122, -94, 7, (255, 255, 255)); o.circ(124, -94, 3.5, (10, 10, 10))
+    for k in range(5):
+        o.poly([(-70 + k * 32, -34 + abs(k - 2) * 8), (-54 + k * 32, -64 + abs(k - 2) * 10), (-38 + k * 32, -36 + abs(k - 2) * 8)], (230, 150, 60))
+    for lx, ph in ((-40, 0), (40, 3)):
+        o.poly([(lx - 18, 60), (lx + 18, 60), (lx + 14 + st * (1 if ph else -1), 128), (lx - 18 + st * (1 if ph else -1), 128)], (70, 150, 80))
+    o.poly([(-60, 40), (-30, 50), (-50, 110)], (70, 150, 80)) if False else None
+
+
 OBJ_FUNCS = dict(beetle=o_beetle, frog=o_frog, spider=o_spider, cat=o_cat, bird=o_bird, fish=o_fish, thermometer=o_thermometer,
                  flask=o_flask, explosion=o_explosion, stopwatch=o_stopwatch, heart=o_heart, brain=o_brain, lightbulb=o_lightbulb,
                  coin=o_coin, fire=o_fire, drop=o_drop, atom=o_atom, gear=o_gear, magnifier=o_magnifier, warning=o_warning,
-                 question=o_question, bolt=o_bolt)
-LAYOUT = {1: [(0.5, 0.40, 1.0)], 2: [(0.28, 0.42, 0.6), (0.72, 0.42, 0.6)], 3: [(0.18, 0.46, 0.46), (0.5, 0.37, 0.5), (0.82, 0.46, 0.46)]}
+                 question=o_question, bolt=o_bolt, tomato=o_tomato, apple=o_apple, banana=o_banana, pizza=o_pizza, burger=o_burger,
+                 coffee=o_coffee, egg=o_egg, ketchup=o_ketchup, tree=o_tree, flower=o_flower, sun=o_sun, moon=o_moon, star=o_star,
+                 snowflake=o_snowflake, car=o_car, plane=o_plane, house=o_house, robot=o_robot, phone=o_phone, laptop=o_laptop, book=o_book,
+                 trophy=o_trophy, key=o_key, crown=o_crown, globe=o_globe, rocket=o_rocket, tooth=o_tooth, eye=o_eye, dog=o_dog,
+                 human=o_human, dinosaur=o_dinosaur)
+OBJECTS = list(OBJ_FUNCS.keys())
+LAYOUT = {1: [(0.5, 0.40, 1.0)], 2: [(0.30, 0.42, 0.55), (0.70, 0.42, 0.55)], 3: [(0.2, 0.46, 0.42), (0.5, 0.37, 0.46), (0.8, 0.46, 0.42)]}
 
 
 def objects(c, names=()):
@@ -761,7 +1027,15 @@ KEYWORDS = [(r"everest|climb|summit|peak|mountaineer", "climb"), (r"mountain|alp
             (r"planet|galaxy|space|stars", "space"), (r"earth|world", "earth_space"), (r"city|building|skyscraper", "city_day"),
             (r"forest|jungle", "forest"), (r"desert|sand|dune", "desert"), (r"arctic|polar|iceberg", "arctic"),
             (r"volcano|lava|eruption", "volcano")]
-OBJ_KEYWORDS = [(r"beetle|insect|\bbug|ant\b|ants\b|bee\b|bees\b", "beetle"), (r"frog|toad", "frog"), (r"spider|web", "spider"), (r"\bcat|kitten|\bdog|animal|predator", "cat"),
+OBJ_KEYWORDS = [(r"ketchup|sauce|condiment", "ketchup"), (r"tomato", "tomato"), (r"apple", "apple"), (r"banana", "banana"), (r"pizza", "pizza"),
+                (r"burger|sandwich|fast food", "burger"), (r"coffee|tea\b|caffeine|cafe", "coffee"), (r"\begg", "egg"), (r"fruit|berry|berries|vegetable|plant|seed", "tomato"),
+                (r"tree|wood|paper", "tree"), (r"flower|bloom|pollen", "flower"), (r"\bsun\b|sunshine|daylight", "sun"), (r"moon|lunar", "moon"), (r"\bstar\b|famous|best|record", "star"),
+                (r"snow|ice\b|cold|freez|winter", "snowflake"), (r"\bcars?\b|drive|road|vehicle|speeding", "car"), (r"plane|flight|airline|aircraft", "plane"), (r"house|home|room|live in", "house"),
+                (r"robot|\bai\b|artificial|computer", "robot"), (r"phone|smartphone|app\b|text message", "phone"), (r"laptop|internet|online|code|website", "laptop"),
+                (r"book|read|story|wrote|writer|history", "book"), (r"win|won|champion|prize|trophy|medal", "trophy"), (r"key\b|unlock|password", "key"), (r"king|queen|royal|crown|empire", "crown"),
+                (r"globe|country|countries|planet earth|worldwide|across the world", "globe"), (r"tooth|teeth|dentist", "tooth"), (r"\beyes?\b|vision|see\b|sight|watch", "eye"),
+                (r"\bdogs?\b|puppy|wolf", "dog"), (r"dinosaur|prehistoric|fossil|jurassic", "dinosaur"), (r"people|person|human|man\b|woman|children|kids|everyone", "human"),
+(r"beetle|insect|\bbug|ant\b|ants\b|bee\b|bees\b", "beetle"), (r"frog|toad", "frog"), (r"spider|web", "spider"), (r"\bcat|kitten|\bdog|animal|predator", "cat"),
                 (r"bird|fly|flies|wing", "bird"), (r"fish|shark|whale", "fish"), (r"hot|boil|degree|heat|temperature|warm|°", "thermometer"),
                 (r"chemic|liquid|mix|enzyme|acid|react|experiment|lab", "flask"), (r"explo|blast|bang|shoot|fire[sd]?\b|spray|burst|cannon", "explosion"),
                 (r"second|fast|speed|quick|time|minute|hour|instant", "stopwatch"), (r"heart|love|blood", "heart"), (r"brain|smart|think|mind|memory|intelligen", "brain"),
