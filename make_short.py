@@ -1,57 +1,50 @@
 #!/usr/bin/env python3
-"""One run -> a finished 9:16 Short (video + title/description). Free tools only.
-LLM: GitHub Models (uses the workflow's GITHUB_TOKEN). Voice: edge-tts. Render: paper-doc engine + ffmpeg."""
+"""One run -> a finished 9:16 Short: AI story + CODE-DRAWN ANIMATION that matches each sentence + voice + captions + music.
+Free tools only. LLM: Groq/Gemini/etc. Animation: anim.py (Pillow). Voice: edge-tts / gTTS. Render: ffmpeg."""
 import asyncio, json, os, random, re, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import anim
 
 ROOT = Path(__file__).resolve().parent
 WORK, OUT = ROOT / "work", ROOT / "out"
-ENGINE = ROOT / "paper-doc" / "scripts" / "paper_doc.py"
 TOPIC = os.environ.get("TOPIC", "").strip()
 VOICE = os.environ.get("VOICE", "en-US-GuyNeural")
 MODEL = os.environ.get("MODEL", "openai/gpt-4.1-mini")
 OFFLINE = os.environ.get("OFFLINE") == "1"
-GAP, LEAD, TAIL = 0.25, 0.3, 1.2
-COLORS = {"red", "ink", "green", "yellow", "navy", "orange", "blue"}
+GAP = 0.08            # tiny breath between sentences (no dead air)
+SPEED = 1.08          # voice speed-up for a punchier feel
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-PROMPT = """You write scripts for faceless 30-45 second YouTube Shorts / Reels of surprising, TRUE facts.
+PROMPT = """You write scripts for faceless 35-45 second animated YouTube Shorts telling a surprising TRUE story or fact.
 {topic_rule}
 Avoid these topics already used: {used}
-Return ONLY JSON:
+Each sentence is shown as an ANIMATED SCENE chosen from a fixed library. Return ONLY JSON:
 {{"topic": "short topic name",
  "title": "YouTube title under 70 chars",
  "description": "2 short sentences",
  "hashtags": ["#shorts", "..."],
  "facts_to_verify": ["each factual claim with a number or name"],
  "segments": [
-  {{"say": "one spoken sentence, max 14 words",
-    "title": ["LINE 1", "LINE 2"],
-    "red": 2,
-    "dark": false,
-    "prop": {{"kind": "stamp|sticky|burst|text|name_tag|warning|rings|sparkle", "text": "short", "line1": "", "line2": "", "sub": ""}}}}
+  {{"say": "one spoken sentence, max 14 words, no emojis",
+    "scene": "ONE of: {scenes}",
+    "extras": ["0-2 of: {extras}"],
+    "camera": "ONE of: {cameras}",
+    "big_text": "optional key number or word shown huge, max 12 chars, e.g. 8,848 M (empty string if none)"}}
  ]}}
-Rules: 8 to 11 segments, 85-110 spoken words in total. Segment 1 is a hook with the strangest fact first;
-the last segment is a twist or payoff that makes people share. Real, well documented facts only; no made-up numbers.
-Each title line is UPPERCASE, max 13 characters, 1-2 words. 'text' props max 9 characters. 'sticky' text is "?" or "!".
-'dark' true for 'how it works' segments. Mix prop kinds; use name_tag for the subject's name once."""
+Rules: 9 to 12 segments, 90-115 spoken words in total. Segment 1 is a hook with the strangest fact first;
+the last segment is a twist that makes people share. Real, well documented facts only; no invented numbers.
+Pick the scene that best matches what the sentence says (a climb story: climb, summit, mountain_storm, mountain_night;
+ocean story: ocean_day, underwater; space story: space, earth_space, rocket_launch). Vary scene and camera between segments
+but keep the story's world consistent. Use big_text for the most surprising number in about half of the segments."""
 
-SAMPLE = {"topic": "Mantis shrimp", "title": "The shrimp that punches like a bullet", "description": "Test.",
- "hashtags": ["#shorts"], "facts_to_verify": [], "segments": [
- {"say": "Imagine a shrimp that can punch through glass.", "title": ["A SHRIMP THAT", "PUNCHES?"], "red": 2, "prop": {"kind": "sticky", "text": "?"}},
- {"say": "This is not a movie, it is completely real.", "title": ["IT IS", "REAL"], "red": 2, "prop": {"kind": "stamp", "text": "TRUE", "color": "green"}},
- {"say": "Meet the mantis shrimp, about ten centimetres long.", "title": ["MEET THE", "MANTIS SHRIMP"], "red": 2, "prop": {"kind": "name_tag", "line1": "MANTIS", "line2": "SHRIMP", "sub": "10 CM LONG"}},
- {"say": "Its punch moves at about twenty three metres per second.", "title": ["FASTER THAN", "A BULLET?"], "red": 2, "dark": True, "prop": {"kind": "burst", "text": "23 M/S"}},
- {"say": "The punch collapses water into bubbles that flash with heat.", "title": ["BOILING", "BUBBLES"], "red": 2, "dark": True, "prop": {"kind": "rings"}},
- {"say": "Share this with someone who loves weird animals.", "title": ["MANTIS", "SHRIMP"], "red": 1, "prop": {"kind": "burst", "text": "WOW!"}}]}
-
-
-def sh(cmd, **kw):
-    return subprocess.run(cmd, check=True, **kw)
-
-
-def used_topics():
-    p = ROOT / "topics.txt"
-    return [l.strip() for l in p.read_text().splitlines() if l.strip()][-60:] if p.exists() else []
+SAMPLE = {"topic": "Mount Everest", "title": "Everest test", "description": "Test.", "hashtags": ["#shorts"],
+ "facts_to_verify": [], "segments": [
+ {"say": "Imagine a mountain so tall that planes could almost touch it.", "scene": "mountain_day", "extras": ["birds"], "camera": "tilt_up", "big_text": ""},
+ {"say": "Mount Everest rises about eight thousand eight hundred forty eight metres.", "scene": "mountain_sunset", "extras": [], "camera": "zoom_in", "big_text": "8,848 M"},
+ {"say": "Climbers call the top the death zone, because there is very little oxygen.", "scene": "climb", "extras": ["snow"], "camera": "pan_right", "big_text": "DEATH ZONE"},
+ {"say": "Storms can arrive in minutes and freeze everything.", "scene": "mountain_storm", "extras": ["shake"], "camera": "zoom_out", "big_text": ""},
+ {"say": "And yet every year, hundreds of people stand on top.", "scene": "summit", "extras": [], "camera": "zoom_in", "big_text": ""}]}
 
 
 def _extract_json(txt):
@@ -97,7 +90,9 @@ def _ask_gemini(prompt):
 def _ask_compat(name, url, key, model, prompt, json_mode):
     """Any OpenAI-compatible chat endpoint (Groq, OpenRouter, GitHub legacy)."""
     import requests
-    payload = {"model": model, "temperature": 0.9, "messages": [{"role": "user", "content": prompt}]}
+    payload = {"model": model, "temperature": 0.9, "max_tokens": 6000, "messages": [{"role": "user", "content": prompt}]}
+    if "gpt-oss" in model:
+        payload["reasoning_effort"] = "low"
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
     r = requests.post(url, json=payload, timeout=120, headers={"Authorization": "Bearer " + key})
@@ -137,7 +132,8 @@ def llm():
             "Pick ONE topic yourself from this random category: " + random.choice(
                 ["animals", "the human body", "space", "history", "ocean", "insects", "physics", "food science", "plants", "geology"]) +
             ". Choose something surprising that most people do not know.")
-    prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none")
+    prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none", scenes=", ".join(anim.SCENES),
+                           extras=", ".join(anim.EXTRAS), cameras=", ".join(anim.CAMERAS))
     env = os.environ.get
     attempts = []
     if env("GROQ_API_KEY"):
@@ -167,127 +163,154 @@ def llm():
     raise SystemExit("LLM FAILED. See the 'LLM attempt failed' lines above for the raw server reply.")
 
 
-def clean(s, n):
-    s = re.sub(r"[^\w\s'?!.%°/+-]", "", str(s).upper()).strip()
-    return s[:n].strip()
+
+def sh(cmd, **kw):
+    return subprocess.run(cmd, check=True, **kw)
 
 
-def two_lines(title):
-    words = " ".join(map(str, title)).upper().split() if isinstance(title, list) else str(title).upper().split()
-    words = [clean(w, 13) for w in words if w] or ["WOW"]
-    best = (10 ** 9, [" ".join(words), ""])
-    for k in range(1, len(words) + 1):
-        a, b = " ".join(words[:k]), " ".join(words[k:])
-        score = max(len(a), len(b))
-        if score < best[0]:
-            best = (score, [a, b])
-    a, b = best[1]
-    return [a[:13].strip(), b[:13].strip()] if b else [a[:13].strip(), ""]
-
-
-def element(p, dark):
-    k = str(p.get("kind", "")).lower()
-    base = {"x": 540, "y": 1180, "at": 0.4}
-    t = clean(p.get("text", ""), 9)
-    if k == "stamp":
-        c = p.get("color") if p.get("color") in COLORS else "red"
-        return {**base, "type": "stamp", "text": t or "TRUE", "color": c, "tilt": random.choice([-8, -5, 6]), "anim": "slam"}
-    if k == "sticky":
-        return {**base, "type": "sticky", "text": (t or "?")[:2], "rot": random.choice([-4, 3])}
-    if k == "burst":
-        return {**base, "type": "burst", "text": t or "WOW!", "size": 0.85, "color": "yellow", "rot": -4, "anim": "punch"}
-    if k == "text":
-        return {**base, "type": "text", "text": t or "!", "size": 140, "color": "xray" if dark else "ink"}
-    if k == "name_tag":
-        return {**base, "type": "name_tag", "line1": clean(p.get("line1") or t, 10) or "NAME", "line2": clean(p.get("line2"), 10),
-                "sub": clean(p.get("sub"), 24), "rot": -3}
-    if k == "warning":
-        return {**base, "type": "warning", "mark": "!"}
-    if k == "rings":
-        return {**base, "type": "rings", "color": "blue", "n": 4}
-    return {**base, "type": "sparkle", "n": 14, "r": 380}
+def used_topics():
+    p = ROOT / "topics.txt"
+    return [l.strip() for l in p.read_text().splitlines() if l.strip()][-60:] if p.exists() else []
 
 
 async def _edge(text, path):
     import edge_tts
-    await edge_tts.Communicate(text, VOICE, rate="+4%").save(str(path))
+    await edge_tts.Communicate(text, VOICE, rate="+0%").save(str(path))
+
+
+def _groq_tts(text, path):
+    """Groq Orpheus: expressive free AI voice. Needs GROQ_API_KEY + terms accepted once in the Groq console."""
+    import requests
+    key = os.environ.get("GROQ_API_KEY")
+    if not key:
+        raise RuntimeError("no GROQ_API_KEY")
+    r = requests.post("https://api.groq.com/openai/v1/audio/speech", headers={"Authorization": "Bearer " + key}, timeout=90,
+                      json={"model": "canopylabs/orpheus-v1-english", "input": text[:195],
+                            "voice": os.environ.get("GROQ_VOICE", "troy"), "response_format": "wav"})
+    if r.status_code != 200 or len(r.content) < 2000:
+        raise RuntimeError(f"HTTP {r.status_code} {r.text[:300]}")
+    Path(path).write_bytes(r.content)
+
+
+def _edge_tts(text, path):
+    asyncio.run(_edge(text, path))
+    if Path(path).stat().st_size < 1000:
+        raise RuntimeError("empty file")
+
+
+def _gtts(text, path):
+    from gtts import gTTS
+    gTTS(text=text, lang="en").save(str(path))
 
 
 def tts(text, path):
-    try:
-        asyncio.run(_edge(text, path))
-        if Path(path).stat().st_size > 1000:
+    errors = []
+    for name, fn in (("groq-orpheus", _groq_tts), ("edge-tts", _edge_tts), ("gTTS", _gtts)):
+        try:
+            fn(text, path)
+            print(f"  voice: {name}", flush=True)
             return
-        raise RuntimeError("edge-tts produced an empty file")
-    except Exception as e:
-        print("edge-tts failed, falling back to gTTS:", type(e).__name__, e, flush=True)
-    try:
-        from gtts import gTTS
-        gTTS(text=text, lang="en").save(str(path))
-    except Exception as e:
-        raise SystemExit(f"TTS FAILED (edge-tts and gTTS): {type(e).__name__} {e}")
+        except Exception as e:
+            errors.append(f"{name}: {type(e).__name__} {str(e)[:250]}")
+            print("TTS failed ->", errors[-1], flush=True)
+    raise SystemExit("ALL TTS ENGINES FAILED:\n" + "\n".join(errors))
 
 
 def duration(p):
     return float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)]).strip())
 
 
+# ---------- captions ----------
+def chunk_words(text, limit=15):
+    words = re.sub(r"[^\w\s'’%.,?!$-]", "", text).upper().split()
+    chunks, cur = [], ""
+    for w in words:
+        if cur and len(cur) + 1 + len(w) > limit:
+            chunks.append(cur)
+            cur = w
+        else:
+            cur = (cur + " " + w).strip()
+    if cur:
+        chunks.append(cur)
+    return chunks or [text.upper()[:limit]]
+
+
+def caption_filters(text, dur, i):
+    chunks = chunk_words(text)
+    total = sum(len(c) for c in chunks)
+    t, parts = 0.0, []
+    for n, c in enumerate(chunks):
+        d = dur * len(c) / total
+        f = WORK / f"cap{i}_{n}.txt"
+        f.write_text(c)
+        end = dur + 1 if n == len(chunks) - 1 else t + d
+        parts.append(f"drawtext=fontfile={FONT}:textfile={f}:fontsize=80:fontcolor=white:borderw=9:bordercolor=black"
+                     f":x=(w-text_w)/2:y=h*0.66:enable='between(t,{t:.3f},{end:.3f})'")
+        t += d
+    return ",".join(parts)
+
+
 def main():
     WORK.mkdir(exist_ok=True); OUT.mkdir(exist_ok=True)
     data = SAMPLE if OFFLINE else llm()
-    segs = [s for s in data.get("segments", []) if str(s.get("say", "")).strip()][:12]
+    segs = [s for s in data.get("segments", []) if str(s.get("say", "")).strip()][:13]
     if len(segs) < 3:
         raise SystemExit("LLM returned too few segments")
-    print("Topic:", data.get("topic"), "| segments:", len(segs))
+    topic = str(data.get("topic", "facts"))
+    print("Topic:", topic, "| segments:", len(segs), flush=True)
 
-    # voice: one clip per segment -> exact scene timing
+    # 1) voice, one clip per sentence, silence trimmed at both ends -> no dead air
     wavs, durs = [], []
-    sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(GAP), str(WORK / "gap.wav")])
-    sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(LEAD), str(WORK / "lead.wav")])
+    trim = "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse"
     for i, s in enumerate(segs):
-        wav = WORK / f"seg{i}.wav"
+        raw = WORK / f"seg{i}_raw.wav"
         if OFFLINE:
             n = len(s["say"].split()) * 0.38
-            sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", str(n), str(wav)])
+            sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"sine=frequency={200 + 30 * i}:duration={n}", "-af",
+                "volume=0.3,adelay=500|500,apad=pad_dur=0.6", "-ar", "44100", "-ac", "2", str(raw)])
         else:
             mp3 = WORK / f"seg{i}.mp3"
             tts(s["say"], mp3)
-            sh(["ffmpeg", "-v", "error", "-y", "-i", str(mp3), "-ar", "44100", "-ac", "2", str(wav)])
+            sh(["ffmpeg", "-v", "error", "-y", "-i", str(mp3), "-ar", "44100", "-ac", "2", str(raw)])
+        wav = WORK / f"seg{i}.wav"
+        sh(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-af", f"{trim},atempo={SPEED},apad=pad_dur={GAP}", str(wav)])
         wavs.append(wav); durs.append(duration(wav))
-    lst = ["file 'lead.wav'"]
-    for w in wavs:
-        lst += [f"file '{w.name}'", "file 'gap.wav'"]
-    (WORK / "list.txt").write_text("\n".join(lst))
-    sh(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(WORK / "list.txt"), str(WORK / "voice.wav")])
+    (WORK / "list.txt").write_text("\n".join(f"file '{w.name}'" for w in wavs))
+    sh(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(WORK / "list.txt"), "-c", "copy", str(WORK / "voice.wav")])
+    total = sum(durs)
+    print(f"Voice: {total:.1f}s", flush=True)
 
-    # scene plan
-    scenes, t = [], LEAD
+    # 2) one ANIMATED scene per sentence, captions burned in
+    vids = []
     for i, (s, d) in enumerate(zip(segs, durs)):
-        dark = bool(s.get("dark"))
-        sc = {"start": round(t, 2), "title": two_lines(s.get("title", ["WOW", ""])), "red": 2 if s.get("red", 2) == 2 else 1,
-              "page": "dark" if dark else "kraft", "elements": [element(s.get("prop", {}), dark)]}
-        if not dark and i % 2 == 0:
-            sc["scenery"] = i % 5 + 1
-        if not sc["title"][1]:
-            sc["title"] = [sc["title"][0], ""]
-        scenes.append(sc)
-        t += d + GAP
-    total = round(t + TAIL, 2)
-    plan = {"meta": {"voice": str(WORK / "voice.wav"), "out": str(OUT / "short.mp4"), "duration": total,
-                     "header": clean(data.get("topic", "FACTS"), 18) + " FILES", "music": {"db": -21}, "whoosh_db": -20},
-            "subjects": {}, "sounds": [{"t": round(t - d - GAP + 0.1, 2), "sfx": "boom", "db": -9}], "scenes": scenes}
-    (WORK / "plan.json").write_text(json.dumps(plan, indent=1))
-    print("Rendering", total, "s ...")
-    sh([sys.executable, str(ENGINE), "render", str(WORK / "plan.json")])
+        spec = anim.make_spec(s, i)
+        out = WORK / f"v{i}.mp4"
+        anim.render_segment(spec, d, out, vf_extra=caption_filters(s["say"], d - GAP, i))
+        vids.append(out)
+        print(f"  segment {i + 1}/{len(segs)} ok ({spec['scene']}, {spec['cam']})", flush=True)
+    (WORK / "vlist.txt").write_text("\n".join(f"file '{v.name}'" for v in vids))
+    sh(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(WORK / "vlist.txt"), "-c", "copy", str(WORK / "video.mp4")])
+
+    # 3) continuous music bed + voice, loudness-normalised
+    sh(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=110", "-f", "lavfi", "-i", "sine=frequency=165",
+        "-f", "lavfi", "-i", "sine=frequency=220", "-filter_complex",
+        "[0][1][2]amix=inputs=3,lowpass=f=700,tremolo=f=0.3:d=0.5", "-t", f"{total:.2f}", str(WORK / "music.wav")])
+    fade = max(total - 1.0, 0)
+    sh(["ffmpeg", "-v", "error", "-y", "-i", str(WORK / "video.mp4"), "-i", str(WORK / "voice.wav"), "-i", str(WORK / "music.wav"),
+        "-filter_complex",
+        f"[2:a]volume=0.10,afade=t=in:d=0.8,afade=t=out:st={fade:.2f}:d=1[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0,"
+        "volume=2,loudnorm=I=-14:TP=-1.5[a]",
+        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.2f}", str(OUT / "short.mp4")])
 
     tags = " ".join(data.get("hashtags", ["#shorts"]))
     (OUT / "upload_info.txt").write_text(
         f"TITLE:\n{data.get('title','')}\n\nDESCRIPTION:\n{data.get('description','')}\n\n{tags}\n\n"
-        "CHECK THESE FACTS BEFORE POSTING:\n" + "\n".join("- " + str(f) for f in data.get("facts_to_verify", [])) + "\n")
+        "CHECK THESE FACTS BEFORE POSTING:\n" + "\n".join("- " + str(f) for f in data.get("facts_to_verify", [])) +
+        "\n\nANIMATION: generated by code (no third-party footage).\n")
     if not OFFLINE:
         with open(ROOT / "topics.txt", "a") as f:
-            f.write(str(data.get("topic", "")).strip() + "\n")
-    print("DONE ->", OUT / "short.mp4")
+            f.write(topic.strip() + "\n")
+    print("DONE ->", OUT / "short.mp4", flush=True)
 
 
 if __name__ == "__main__":
