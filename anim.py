@@ -4,6 +4,10 @@ import math, random, re, subprocess
 from functools import lru_cache
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+try:
+    import icons
+except Exception:  # cairosvg/emoji missing -> only the hand-animated objects are available
+    icons = None
 
 W, H = 720, 1280
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
@@ -916,14 +920,37 @@ OBJECTS = list(OBJ_FUNCS.keys())
 LAYOUT = {1: [(0.5, 0.40, 1.0)], 2: [(0.30, 0.42, 0.55), (0.70, 0.42, 0.55)], 3: [(0.2, 0.46, 0.42), (0.5, 0.37, 0.46), (0.8, 0.46, 0.42)]}
 
 
+ICON_STYLES = ["bob", "wiggle", "pulse", "swing"]
+
+
+def icon_draw(c, img, x, y, size, t, style, par=0.6):
+    k = c.k(par)
+    sx, sy = c.m(x, y, par)
+    sz = max(8, int(size * k))
+    sc, ang, dy = 1.0, 0.0, 0.0
+    if style == "bob": dy = -12 * math.sin(t * 3)
+    elif style == "wiggle": ang = 8 * math.sin(t * 4)
+    elif style == "pulse": sc = 1 + 0.07 * math.sin(t * 4)
+    elif style == "swing": ang = 14 * math.sin(t * 2.2)
+    sz = max(8, int(sz * sc))
+    im = img.resize((sz, sz), Image.LANCZOS)
+    if ang:
+        im = im.rotate(ang, resample=Image.BICUBIC, expand=True)
+    c.d.ellipse([sx - sz * 0.30, sy + sz * 0.46, sx + sz * 0.30, sy + sz * 0.54], fill=(0, 0, 0, 46))
+    c.img.paste(im, (int(sx - im.width / 2), int(sy - im.height / 2 + dy)), im)
+
+
 def objects(c, names=()):
-    names = [n for n in names if n in OBJ_FUNCS][:3]
-    for i, (n, (fx, fy, sc)) in enumerate(zip(names, LAYOUT.get(len(names), []))):
+    items = [n for n in names if isinstance(n, tuple) or (isinstance(n, str) and n in OBJ_FUNCS)][:3]
+    for i, (n, (fx, fy, sc)) in enumerate(zip(items, LAYOUT.get(len(items), []))):
         lt = c.t - 0.12 * i
         if lt < 0:
             continue
         pop = back(clamp(lt / 0.45))
         if pop < 0.03:
+            continue
+        if isinstance(n, tuple):
+            icon_draw(c, n[1], W * fx, H * fy, 430 * sc * pop, lt, n[2])
             continue
         u = 2.0 * sc * pop
         o = O(c, W * fx, H * fy + 9 * math.sin(c.t * 2.2 + i), u)
@@ -1053,16 +1080,49 @@ def infer_objects(text):
     return out[:2]
 
 
+def resolve_objects(tokens, say):
+    """hand-animated name -> as is; any other noun/emoji -> ('icon', image, style) from the ~11,000-icon libraries"""
+    out = []
+    for n, tok in enumerate(tokens):
+        tok = str(tok).strip()
+        if tok.lower() in OBJ_FUNCS:
+            out.append(tok.lower()); continue
+        if icons is None:
+            continue
+        try:
+            r = icons.resolve(tok)
+            img = icons.get_image(*r) if r else None
+        except Exception as e:
+            print("  icon lookup failed for", tok, "->", type(e).__name__, e, flush=True); continue
+        if img is not None:
+            out.append(("icon", img, ICON_STYLES[(len(tok) + n) % 4], tok))
+    if not out and icons is not None:           # AI gave nothing usable: try the sentence's own nouns
+        words = sorted(set(re.findall(r"[A-Za-z]{4,}", say)), key=len, reverse=True)[:7]
+        for w in words:
+            try:
+                r = icons.resolve(w); img = icons.get_image(*r) if r else None
+            except Exception:
+                continue
+            if img is not None:
+                out.append(("icon", img, ICON_STYLES[len(w) % 4], w))
+            if len(out) >= 2:
+                break
+    return out[:3]
+
+
 def make_spec(seg, i):
     say = seg.get("say", "")
-    objs = [o for o in (seg.get("objects") or []) if o in OBJECTS][:3]
+    raw_objs = seg.get("objects") or []
+    if isinstance(raw_objs, str):
+        raw_objs = [raw_objs]
+    objs = resolve_objects(raw_objs[:3], say) if raw_objs else []
     scene = str(seg.get("scene", "")).strip().lower()
     if scene not in SCENES:
         scene = next((v for k, v in KEYWORDS if re.search(k, say.lower())), "")
     if not scene:
         scene = ["stage_nature", "stage_lab", "stage_warm", "stage_dark", "stage_bright"][i % 5]
     if not objs and scene.startswith("stage_"):
-        objs = infer_objects(say) or ["question"]
+        objs = infer_objects(say) or resolve_objects([], say) or ["question"]
     extras = [e for e in (seg.get("extras") or []) if e in EXTRAS][:2]
     cam = seg.get("camera") if seg.get("camera") in CAMERAS else CAMERAS[i % 6]
     txt = re.sub(r"[^\w\s,.%$°/+!?-]", "", str(seg.get("big_text", ""))).upper().strip()[:16]
@@ -1078,7 +1138,7 @@ def make_spec(seg, i):
         elif e in ("sun", "snow", "rain", "birds", "moon", "stars", "clouds", "fish", "planet", "lightning", "embers"):
             els.append((e, {}))
         have.add(e)
-    return {"scene": scene, "sky": sky, "sky_to": sky_to, "els": els, "cam": cam, "text": txt, "shake": "shake" in extras, "idx": i, "objs": objs}
+    return {"scene": scene, "sky": sky, "sky_to": sky_to, "els": els, "cam": cam, "text": txt, "shake": "shake" in extras, "idx": i, "objs": [o if isinstance(o, str) else o[3] for o in objs]}
 
 
 def camera(name, p, t, shake):
