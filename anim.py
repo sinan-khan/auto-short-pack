@@ -10,9 +10,8 @@ FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 SCENES = ["mountain_day", "mountain_sunset", "mountain_night", "mountain_storm", "climb", "summit", "ocean_day",
           "ocean_storm", "underwater", "space", "earth_space", "rocket_launch", "city_day", "city_night", "forest",
-          "desert", "arctic", "volcano", "abstract"]
-EXTRAS = ["snow", "rain", "birds", "sun", "moon", "stars", "clouds", "fish", "rocket", "person", "planet", "lightning",
-          "embers", "shake"]
+          "desert", "arctic", "volcano", "abstract", "stage_nature", "stage_lab", "stage_dark", "stage_warm", "stage_bright"]
+EXTRAS = ["snow", "rain", "birds", "sun", "moon", "stars", "clouds", "person", "lightning", "embers", "shake"]
 CAMERAS = ["zoom_in", "zoom_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "none"]
 
 
@@ -26,7 +25,9 @@ def mix(c1, c2, t): return tuple(int(lerp(a, b, t)) for a, b in zip(c1, c2))
 SKY = {"day": ((80, 150, 230), (205, 232, 250)), "dawn": ((70, 90, 165), (255, 195, 145)),
        "sunset": ((55, 45, 115), (255, 140, 85)), "night": ((6, 8, 28), (32, 42, 95)),
        "storm": ((38, 42, 55), (105, 112, 125)), "space": ((2, 2, 12), (22, 12, 52)),
-       "water": ((20, 110, 160), (4, 22, 58)), "red": ((55, 6, 8), (210, 75, 30))}
+       "water": ((20, 110, 160), (4, 22, 58)), "red": ((55, 6, 8), (210, 75, 30)),
+       "lab": ((8, 36, 52), (24, 100, 110)), "warm": ((250, 140, 70), (255, 214, 130)), "bright": ((255, 226, 130), (255, 250, 215)),
+       "dark": ((14, 10, 34), (52, 32, 92)), "meadow": ((120, 195, 250), (222, 240, 190))}
 MT = {"day": ((150, 178, 208), (52, 68, 92)), "dawn": ((195, 145, 165), (58, 48, 84)),
       "sunset": ((205, 112, 122), (58, 33, 64)), "night": ((42, 58, 105), (11, 15, 33)),
       "storm": ((98, 103, 118), (30, 33, 42)), "red": ((125, 42, 40), (28, 9, 11)),
@@ -381,10 +382,316 @@ def lightning(c, seed=14):
         c.d.line(pts, fill=(255, 255, 230, 255), width=6)
 
 
+
+# ---------------------------------------------------------------- animated objects (any topic)
+OBJECTS = ["beetle", "frog", "spider", "cat", "bird", "fish", "thermometer", "flask", "explosion", "stopwatch", "heart", "brain",
+           "lightbulb", "coin", "fire", "drop", "atom", "gear", "magnifier", "warning", "question", "bolt"]
+
+
+class O:
+    """relative drawing helper: coordinates in units around (x, y), u pixels per unit"""
+    def __init__(s, c, x, y, u, par=0.6): s.c, s.x, s.y, s.u, s.par = c, x, y, u, par
+    def P(s, dx, dy): return (s.x + dx * s.u, s.y + dy * s.u)
+    def poly(s, pts, col): s.c.poly([s.P(a, b) for a, b in pts], s.par, col + ((255,) if len(col) == 3 else ()))
+    def ell(s, dx, dy, rx, ry, col): s.c.ellipse(s.x + dx * s.u, s.y + dy * s.u, rx * s.u, ry * s.u, s.par, col + ((255,) if len(col) == 3 else ()))
+    def circ(s, dx, dy, r, col): s.ell(dx, dy, r, r, col)
+    def line(s, pts, col, w): s.c.line([s.P(a, b) for a, b in pts], s.par, col + ((255,) if len(col) == 3 else ()), w * 130 * s.u)
+
+
+def rot(pts, a, cx=0, cy=0):
+    ca, sa = math.cos(a), math.sin(a)
+    return [(cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca) for x, y in pts]
+
+
+def o_beetle(o, t):
+    dark = (22, 20, 24)
+    for side in (-1, 1):
+        for k, yy in enumerate((-30, 5, 40)):
+            sw = math.sin(t * 9 + k * 2.1 + (0 if side > 0 else math.pi)) * 10
+            o.line([(side * 50, yy), (side * 92 + sw * 0.4 * side, yy + (k - 1) * 22 + sw), (side * 118, yy + (k - 1) * 36 + sw * 1.3)], dark, 0.055)
+        a = math.sin(t * 4 + side) * 8
+        o.line([(side * 12, -95), (side * 40 + a, -135), (side * 60 + a * 1.5, -152)], dark, 0.04)
+    o.ell(0, 20, 62, 82, (34, 46, 92))
+    o.ell(-22, -5, 14, 46, (70, 90, 150, 120))
+    o.line([(0, -55), (0, 100)], (12, 18, 40), 0.03)
+    o.ell(0, 94, 36, 16, (232, 112, 40))
+    o.ell(0, -86, 31, 28, (208, 98, 44))
+    for sx in (-1, 1):
+        o.circ(sx * 13, -92, 7, (255, 255, 255)); o.circ(sx * 13, -92, 3.5, (10, 10, 10))
+    pulse = max(0, math.sin(t * 6))
+    for k in range(3):
+        o.circ(-6 + k * 6, 112 + 22 * k * pulse, 5 + 3 * pulse, (255, 150 + 40 * k, 60, int(190 * pulse)))
+
+
+def o_frog(o, t):
+    g, dg = (84, 176, 84), (52, 124, 60)
+    o.ell(-92, 78, 44, 22, dg); o.ell(92, 78, 44, 22, dg)
+    o.ell(0, 32, 96, 72, g); o.ell(0, 48, 60, 40, (196, 232, 150))
+    o.ell(0, -32, 82, 50, g)
+    th = 1 + 0.18 * math.sin(t * 5)
+    o.ell(0, 6, 34 * th, 14 * th, (150, 210, 110))
+    bl = 1 if (t % 2.4) > 0.15 else 0.15
+    for sx in (-1, 1):
+        o.circ(sx * 48, -78, 27, g); o.circ(sx * 48, -78, 19, (255, 255, 255)); o.ell(sx * 48, -78, 9, 12 * bl, (15, 15, 15))
+    o.line([(-58, -20), (-30, -8), (0, -4), (30, -8), (58, -20)], (40, 90, 40), 0.03)
+
+
+def o_spider(o, t):
+    bob = math.sin(t * 2.5) * 14
+    o.line([(0, -520), (0, -40 + bob)], (230, 230, 240, 200), 0.012)
+    o.y += bob * o.u * 0.0
+    for side in (-1, 1):
+        for k in range(4):
+            sw = math.sin(t * 5 + k * 1.2 + (side > 0) * 1.5) * 8
+            yy = -22 + k * 16
+            o.line([(side * 20, yy + 20 + bob), (side * (75 + k * 6), yy - 28 + sw + bob), (side * (115 + k * 9), yy + 30 + k * 12 + sw + bob)], (20, 18, 24), 0.05)
+    o.circ(0, 28 + bob, 46, (36, 30, 44)); o.circ(0, -18 + bob, 27, (50, 42, 60))
+    o.ell(0, 30 + bob, 14, 22, (200, 40, 40, 200))
+    for sx in (-1, 1):
+        o.circ(sx * 10, -24 + bob, 6, (255, 60, 60)); o.circ(sx * 10, -24 + bob, 2.5, (10, 0, 0))
+
+
+def o_cat(o, t):
+    fur, dk = (242, 160, 70), (205, 120, 40)
+    tail = math.sin(t * 3) * 25
+    o.line([(70, 90), (130, 60 + tail), (150, 0 + tail * 1.4)], fur, 0.1)
+    o.ell(0, 80, 82, 66, fur); o.ell(0, 92, 46, 40, (252, 226, 190))
+    o.circ(0, -20, 84, fur)
+    o.poly([(-75, -62), (-35, -92), (-84, -135)], fur); o.poly([(75, -62), (35, -92), (84, -135)], fur)
+    o.poly([(-68, -78), (-45, -90), (-76, -118)], (240, 150, 150)); o.poly([(68, -78), (45, -90), (76, -118)], (240, 150, 150))
+    bl = 1 if (t % 3) > 0.15 else 0.1
+    for sx in (-1, 1):
+        o.ell(sx * 32, -28, 14, 18 * bl, (255, 255, 255)); o.ell(sx * 32, -28, 6, 16 * bl, (20, 20, 20))
+        o.line([(sx * 50, -2), (sx * 125, -12)], (250, 250, 250, 220), 0.012); o.line([(sx * 50, 6), (sx * 125, 12)], (250, 250, 250, 220), 0.012)
+    o.poly([(-9, -2), (9, -2), (0, 9)], (230, 100, 120))
+    o.line([(0, 9), (0, 18), (-14, 24)], (120, 60, 50), 0.02); o.line([(0, 18), (14, 24)], (120, 60, 50), 0.02)
+
+
+def o_bird(o, t):
+    fl = math.sin(t * 9)
+    o.poly([(-60, 20), (-130, 40 - fl * 10), (-60, 50)], (40, 90, 170))
+    o.ell(0, 15, 74, 52, (70, 150, 230)); o.ell(10, 30, 46, 30, (210, 235, 255))
+    o.circ(62, -28, 36, (70, 150, 230))
+    o.poly([(92, -30), (140, -20), (92, -10)], (255, 190, 50))
+    o.circ(72, -36, 8, (255, 255, 255)); o.circ(74, -36, 4, (10, 10, 10))
+    o.poly(rot([(-10, 0), (-60, -90 - fl * 50), (40, -20)], 0, 0, 0), (40, 100, 190))
+    o.poly([(-10, 0), (-70, 40 + fl * 40), (35, 20)], (30, 80, 170, 200))
+
+
+def o_fish(o, t):
+    wag = math.sin(t * 7) * 18
+    o.poly([(-85, 0), (-150, -42 + wag), (-150, 42 + wag)], (255, 120, 40))
+    o.ell(0, 0, 112, 62, (255, 150, 50)); o.poly([(-10, -55), (30, -95), (50, -50)], (255, 110, 40))
+    for k in (-30, 0, 30):
+        o.line([(k, -50), (k + 8, 50)], (255, 255, 255, 180), 0.05)
+    o.circ(66, -10, 11, (255, 255, 255)); o.circ(69, -10, 5, (10, 10, 10))
+    for k in range(3):
+        o.circ(130 + k * 14, -40 - ((t * 60 + k * 30) % 90), 5 + k, (255, 255, 255, 120))
+
+
+def o_thermometer(o, t):
+    lvl = ease(clamp(t / 2.2)); col = mix((70, 140, 255), (255, 50, 40), lvl)
+    o.poly([(-26, -170), (26, -170), (26, 80), (-26, 80)], (240, 244, 250)); o.circ(0, -170, 26, (240, 244, 250)); o.circ(0, 110, 56, (240, 244, 250))
+    o.poly([(-13, 80 - lvl * 240 - 10), (13, 80 - lvl * 240 - 10), (13, 90), (-13, 90)], col); o.circ(0, -170 + 0, 0, col); o.circ(0, 110, 44, col)
+    for k in range(8):
+        o.line([(30, -150 + k * 28), (48 if k % 2 == 0 else 40, -150 + k * 28)], (240, 244, 250, 230), 0.02)
+    if lvl > 0.85:
+        for k in range(5):
+            a = t * 5 + k * 1.3; o.circ(0 + 85 * math.cos(a), 110 + 60 * math.sin(a * 1.4) - ((t * 50 + k * 20) % 60), 7, (255, 160, 60, 160))
+
+
+def o_flask(o, t):
+    lc = mix((70, 220, 130), (170, 90, 240), (math.sin(t * 1.3) + 1) / 2)
+    o.poly([(-28, -150), (28, -150), (28, -60), (110, 90), (110, 110), (-110, 110), (-110, 90), (-28, -60)], (225, 240, 250, 90))
+    surf = 8 * math.sin(t * 4)
+    o.poly([(-70, 8 + surf), (70, 8 - surf), (108, 92), (108, 108), (-108, 108), (-108, 92)], lc)
+    for k in range(8):
+        bx = -70 + (k * 41) % 140; by = 100 - ((t * 70 + k * 37) % 120)
+        o.circ(bx + 6 * math.sin(t * 3 + k), by, 5 + k % 3 * 2, (255, 255, 255, 170))
+    o.poly([(-34, -158), (34, -158), (34, -148), (-34, -148)], (210, 225, 240))
+    o.line([(-110, 110), (110, 110)], (210, 225, 240), 0.03)
+
+
+def o_explosion(o, t):
+    ph = (t % 1.5) / 1.5; sc = 0.35 + 0.9 * ease(clamp(ph * 1.4)); fade = int(255 * (1 - clamp((ph - 0.7) / 0.3)))
+    for rad, col in ((150, (255, 90, 30)), (115, (255, 170, 40)), (70, (255, 240, 150))):
+        pts = []
+        for k in range(32):
+            r = rad * sc * (1.0 if k % 2 == 0 else 0.62) * (1 + 0.1 * math.sin(k * 7 + t * 20))
+            a = k / 32 * math.tau; pts.append((r * math.cos(a), r * math.sin(a)))
+        o.poly(pts, col[:3] + (fade,))
+    for k in range(14):
+        a = k / 14 * math.tau + 0.2; r1, r2 = 150 * sc, 150 * sc + 90 * ph
+        o.line([(r1 * math.cos(a), r1 * math.sin(a)), (r2 * math.cos(a), r2 * math.sin(a))], (255, 230, 120, fade), 0.03)
+
+
+def o_stopwatch(o, t):
+    o.poly([(-14, -150), (14, -150), (14, -125), (-14, -125)], (180, 185, 195)); o.circ(0, 0, 118, (60, 70, 90)); o.circ(0, 0, 104, (245, 247, 250))
+    for k in range(12):
+        a = k / 12 * math.tau; o.line([(88 * math.sin(a), -88 * math.cos(a)), (100 * math.sin(a), -100 * math.cos(a))], (50, 55, 70), 0.025)
+    a = (t / 1.5) * math.tau
+    o.poly(rot([(-5, 10), (5, 10), (3, -88), (-3, -88)], a), (230, 50, 50)); o.circ(0, 0, 9, (50, 55, 70))
+    sw = ease(clamp(((t % 1.5) / 1.5)))
+    o.poly([(0, 0)] + [(70 * math.sin(k / 20 * a), -70 * math.cos(k / 20 * a)) for k in range(21)], (230, 50, 50, 60))
+
+
+def o_heart(o, t):
+    b = (t * 1.6) % 1; sc = 1 + 0.16 * math.exp(-((b - 0.1) / 0.08) ** 2) + 0.1 * math.exp(-((b - 0.3) / 0.08) ** 2)
+    pts = [(16 * math.sin(a) ** 3 * 8.5 * sc, -(13 * math.cos(a) - 5 * math.cos(2 * a) - 2 * math.cos(3 * a) - math.cos(4 * a)) * 8.5 * sc) for a in [k / 60 * math.tau for k in range(60)]]
+    o.poly(pts, (232, 40, 70)); o.ell(-45 * sc, -50 * sc, 18, 26, (255, 150, 170, 150))
+
+
+def o_brain(o, t):
+    pk = (244, 160, 180); pulse = 1 + 0.04 * math.sin(t * 4)
+    for dx, dy, r in ((-62, -10, 58), (62, -10, 58), (-30, -62, 56), (30, -62, 56), (0, -20, 64), (-45, 38, 50), (45, 38, 50), (0, 48, 46)):
+        o.circ(dx * pulse, dy * pulse, r, pk)
+    for pts in ([(-70, -20), (-40, -40), (-20, -10)], [(70, -20), (40, -40), (20, -10)], [(-30, 30), (0, 10), (30, 30)], [(0, -90), (0, -30)]):
+        o.line(pts, (210, 110, 140), 0.03)
+    for k in range(6):
+        a = t * 3 + k * 1.05; r = 110 + 20 * math.sin(t * 5 + k)
+        if math.sin(t * 6 + k * 2) > 0.2:
+            o.circ(r * math.cos(a), -20 + r * math.sin(a) * 0.8, 6, (255, 240, 120))
+
+
+def o_lightbulb(o, t):
+    on = clamp((t - 0.3) / 0.25) * (0.85 + 0.15 * math.sin(t * 25))
+    for k in range(6, 0, -1):
+        o.circ(0, -30, 85 + k * 22, (255, 230, 100, int(18 * on)))
+    o.circ(0, -30, 85, mix((200, 205, 215), (255, 236, 120), on)); o.poly([(-40, 40), (40, 40), (28, 78), (-28, 78)], mix((200, 205, 215), (255, 236, 120), on))
+    o.line([(-18, 10), (-8, -20), (0, 0), (8, -20), (18, 10)], (255, 160, 40) if on > 0.5 else (140, 140, 150), 0.02)
+    for k in range(3):
+        o.poly([(-34, 82 + k * 16), (34, 82 + k * 16), (34, 92 + k * 16), (-34, 92 + k * 16)], (120, 125, 140))
+    if on > 0.5:
+        for k in range(10):
+            a = k / 10 * math.tau; o.line([(125 * math.cos(a), -30 + 125 * math.sin(a)), (160 * math.cos(a), -30 + 160 * math.sin(a))], (255, 230, 100, int(200 * on)), 0.03)
+
+
+def o_coin(o, t):
+    w = abs(math.cos(t * 3)); w = max(w, 0.05)
+    o.ell(0, 0, 110 * w, 110, (190, 140, 20)); o.ell(0, 0, 98 * w, 98, (250, 200, 50)); o.ell(0, 0, 78 * w, 78, (255, 222, 100))
+    if w > 0.5:
+        f = font(max(12, int(130 * o.u * w))); sx, sy = o.c.m(o.x, o.y, o.par)
+        o.c.d.text((sx, sy), "$", font=f, fill=(190, 140, 20, 255), anchor="mm")
+
+
+def o_fire(o, t):
+    o.poly([(-90, 100), (90, 100), (90, 120), (-90, 120)], (90, 55, 35))
+    for scale, col in ((1.0, (255, 100, 30)), (0.72, (255, 170, 40)), (0.42, (255, 240, 150))):
+        pts = [(-80 * scale, 100)]
+        for k in range(9):
+            x = -80 * scale + k * 20 * scale; h = 100 + (170 * scale) * (1 - abs(k - 4) / 4.5) + 22 * math.sin(t * 9 + k * 1.7) * scale
+            pts.append((x, 100 - h))
+        pts += [(80 * scale, 100)]
+        o.poly(pts, col)
+    for k in range(7):
+        o.circ(-60 + k * 20 + 10 * math.sin(t * 3 + k), 80 - ((t * 90 + k * 40) % 220), 4, (255, 210, 90, 200))
+
+
+def o_drop(o, t):
+    sq = 1 + 0.05 * math.sin(t * 4)
+    pts = [(0, -140)] + [(80 * math.sin(a) * sq, 20 - 80 * math.cos(a) * 0.9 + 0) for a in [k / 24 * math.pi + math.pi / 2 for k in range(-12, 13)]]
+    o.poly([(0, -150), (-72, 20), (-60, 70), (0, 100), (60, 70), (72, 20)], (60, 150, 240)); o.circ(0, 40, 66, (60, 150, 240))
+    o.ell(-22, 30, 12, 26, (255, 255, 255, 150))
+    for k in range(3):
+        r = ((t * 0.8 + k / 3) % 1); o.ell(0, 150, 60 + r * 100, 14 + r * 22, (150, 200, 255, int(160 * (1 - r))))
+
+
+def o_atom(o, t):
+    for k in range(3):
+        a = k * math.pi / 3
+        o.poly(rot([(130 * math.cos(q / 40 * math.tau), 46 * math.sin(q / 40 * math.tau)) for q in range(41)], a), (80, 200, 255, 0))
+        pts = rot([(130 * math.cos(q / 60 * math.tau), 46 * math.sin(q / 60 * math.tau)) for q in range(61)], a)
+        o.line(pts, (150, 210, 255, 210), 0.02)
+        e = t * (2.2 + k * 0.5) + k
+        ex, ey = rot([(130 * math.cos(e), 46 * math.sin(e))], a)[0]
+        o.circ(ex, ey, 11, (255, 220, 90))
+    o.circ(0, 0, 26, (255, 90, 90)); o.circ(10, -8, 10, (90, 140, 255))
+
+
+def o_gear(o, t):
+    a = t * 0.9; pts = []
+    for k in range(48):
+        r = 120 if (k // 3) % 2 == 0 else 96; ang = k / 48 * math.tau + a; pts.append((r * math.cos(ang), r * math.sin(ang)))
+    o.poly(pts, (150, 160, 180)); o.circ(0, 0, 70, (120, 130, 150)); o.circ(0, 0, 32, (40, 48, 70))
+    pts = []
+    for k in range(32):
+        r = 62 if (k // 2) % 2 == 0 else 48; ang = -k / 32 * math.tau - a * 1.4; pts.append((r * math.cos(ang) + 0, r * math.sin(ang)))
+
+
+def o_magnifier(o, t):
+    mx, my = 26 * math.cos(t * 1.6), 16 * math.sin(t * 2.2)
+    o.line([(mx + 62, my + 62), (mx + 135, my + 135)], (110, 70, 40), 0.1)
+    o.circ(mx, my, 92, (90, 100, 120)); o.circ(mx, my, 78, (200, 235, 255, 140)); o.ell(mx - 28, my - 30, 16, 28, (255, 255, 255, 120))
+
+
+def o_warning(o, t):
+    sh = 4 * math.sin(t * 25) * (1 if (t % 1.2) < 0.4 else 0)
+    o.poly([(sh, -140), (125 + sh, 90), (-125 + sh, 90)], (30, 30, 30)); o.poly([(sh, -112), (96 + sh, 72), (-96 + sh, 72)], (255, 205, 40))
+    o.poly([(-9 + sh, -50), (9 + sh, -50), (6 + sh, 22), (-6 + sh, 22)], (30, 30, 30)); o.circ(sh, 46, 10, (30, 30, 30))
+
+
+def o_question(o, t):
+    b = 8 * math.sin(t * 3); f = font(max(12, int(300 * o.u)))
+    o.circ(0, b, 125, (110, 90, 230)); o.circ(0, b, 108, (140, 120, 250))
+    sx, sy = o.c.m(o.x, o.y + b * o.u, o.par); o.c.d.text((sx, sy), "?", font=f, fill=(255, 255, 255, 255), anchor="mm")
+
+
+def o_bolt(o, t):
+    fl = 0.8 + 0.2 * math.sin(t * 22)
+    for k in range(5, 0, -1):
+        o.circ(0, 0, 90 + k * 25, (255, 230, 80, int(14 * fl)))
+    o.poly([(25, -150), (-70, 20), (-8, 20), (-38, 150), (80, -30), (14, -30), (60, -150)], (255, 225, 60)); o.poly([(22, -128), (-48, 12), (6, 12)], (255, 250, 190, 160))
+
+
+OBJ_FUNCS = dict(beetle=o_beetle, frog=o_frog, spider=o_spider, cat=o_cat, bird=o_bird, fish=o_fish, thermometer=o_thermometer,
+                 flask=o_flask, explosion=o_explosion, stopwatch=o_stopwatch, heart=o_heart, brain=o_brain, lightbulb=o_lightbulb,
+                 coin=o_coin, fire=o_fire, drop=o_drop, atom=o_atom, gear=o_gear, magnifier=o_magnifier, warning=o_warning,
+                 question=o_question, bolt=o_bolt)
+LAYOUT = {1: [(0.5, 0.40, 1.0)], 2: [(0.28, 0.42, 0.6), (0.72, 0.42, 0.6)], 3: [(0.18, 0.46, 0.46), (0.5, 0.37, 0.5), (0.82, 0.46, 0.46)]}
+
+
+def objects(c, names=()):
+    names = [n for n in names if n in OBJ_FUNCS][:3]
+    for i, (n, (fx, fy, sc)) in enumerate(zip(names, LAYOUT.get(len(names), []))):
+        lt = c.t - 0.12 * i
+        if lt < 0:
+            continue
+        pop = back(clamp(lt / 0.45))
+        if pop < 0.03:
+            continue
+        u = 2.0 * sc * pop
+        o = O(c, W * fx, H * fy + 9 * math.sin(c.t * 2.2 + i), u)
+        OBJ_FUNCS[n](o, lt)
+
+
+def rays(c, color=(255, 255, 255), n=14, alpha=40):
+    cx_, cy_ = W / 2, H * 0.4
+    for k in range(n):
+        if k % 2:
+            continue
+        a0 = k / n * math.tau + c.t * 0.25; a1 = a0 + math.tau / n
+        c.poly([(cx_, cy_), (cx_ + 1600 * math.cos(a0), cy_ + 1600 * math.sin(a0)), (cx_ + 1600 * math.cos(a1), cy_ + 1600 * math.sin(a1))], 0.02, color + (alpha,))
+
+
+def grid(c, color=(120, 230, 230)):
+    for k in range(-2, 16):
+        y = (k * 100 + c.t * 20) % (H + 200) - 100
+        c.d.line([0, y, W, y], fill=color + (28,), width=2)
+    for k in range(0, 9):
+        c.d.line([k * 100, 0, k * 100, H], fill=color + (28,), width=2)
+
+
+def motes(c, n=36, color=(255, 255, 255), seed=21, size=5):
+    rng = random.Random(seed)
+    for k in range(n):
+        x = (rng.uniform(0, W) + 18 * math.sin(c.t * 0.8 + k)) % W; y = H - ((rng.uniform(0, H) + c.t * rng.uniform(15, 50)) % H)
+        r = rng.uniform(2, size); c.d.ellipse([x - r, y - r, x + r, y + r], fill=color + (130,))
+
+
 ELEMENTS = {k: v for k, v in dict(mountains=mountains, hills=hills, pines=pines, sun=sun, moon=moon, stars=stars,
             clouds=clouds, birds=birds, planet=planet, earth=earth, ocean=ocean, underwater=underwater, fish=fish,
             person=person, rocket=rocket, city=city, dunes=dunes, aurora=aurora, volcano_glow=volcano_glow,
-            embers=embers, snow=snow, rain=rain, lightning=lightning).items()}
+            embers=embers, snow=snow, rain=rain, lightning=lightning, objects=objects, rays=rays, grid=grid, motes=motes).items()}
 
 HERO = (W * 0.6, H * 0.50, W * 0.75)
 
@@ -434,32 +741,70 @@ def build(scene):
     elif S == "volcano":
         sky = "red"; E = [("clouds", {"n": 5, "color": (45, 30, 30, 235), "y": 0.1}), ("mountains", {"seed": 2, "layers": 2, "pal": "red", "snow": False,
                           "hero": (W * 0.5, H * 0.55, W * 0.6)}), ("volcano_glow", {}), ("embers", {})]
+    elif S == "stage_nature":
+        sky = "meadow"; E = [("clouds", {"n": 3, "y": 0.1}), ("motes", {"color": (255, 255, 200)}), ("hills", {"color": (80, 160, 80), "base": 0.82, "par": 0.4}), ("hills", {"color": (52, 120, 62), "base": 0.9, "par": 0.8, "seed": 5})]
+    elif S == "stage_lab":
+        sky = "lab"; E = [("grid", {}), ("motes", {"color": (150, 255, 240)})]
+    elif S == "stage_dark":
+        sky = "dark"; E = [("stars", {"n": 70, "ymax": 1.0}), ("rays", {"color": (150, 120, 255), "alpha": 22})]
+    elif S == "stage_warm":
+        sky = "warm"; E = [("rays", {"color": (255, 255, 255), "alpha": 44}), ("motes", {"color": (255, 240, 200)})]
+    elif S == "stage_bright":
+        sky = "bright"; E = [("rays", {"color": (255, 255, 255), "alpha": 90}), ("motes", {"color": (255, 150, 60), "size": 7})]
     else:  # abstract
         sky = "night"; E = [("stars", {"n": 120, "ymax": 1.0}), ("planet", {"x": 0.5, "y": 0.45, "r": 110, "color": (120, 90, 200)})]
     return sky, sky_to, E
 
 
-KEYWORDS = [(r"everest|climb|summit|peak|mountaineer", "climb"), (r"mountain|alps|himalaya", "mountain_day"), (r"storm|thunder|lightning", "mountain_storm"),
-            (r"ocean|sea |waves|ship", "ocean_day"), (r"deep|underwater|fish|reef", "underwater"), (r"rocket|launch|astronaut", "rocket_launch"),
-            (r"planet|galaxy|space|star", "space"), (r"earth|world", "earth_space"), (r"city|building|skyscraper", "city_day"),
-            (r"forest|tree|jungle", "forest"), (r"desert|sand|dune", "desert"), (r"ice|arctic|polar|frozen|snow", "arctic"),
-            (r"volcano|lava|eruption", "volcano"), (r"night|dark|moon", "mountain_night")]
+KEYWORDS = [(r"everest|climb|summit|peak|mountaineer", "climb"), (r"mountain|alps|himalaya", "mountain_day"), (r"storm|thunder", "mountain_storm"),
+            (r"ocean|sea |waves|ship", "ocean_day"), (r"deep sea|underwater|reef", "underwater"), (r"rocket|launch|astronaut", "rocket_launch"),
+            (r"planet|galaxy|space|stars", "space"), (r"earth|world", "earth_space"), (r"city|building|skyscraper", "city_day"),
+            (r"forest|jungle", "forest"), (r"desert|sand|dune", "desert"), (r"arctic|polar|iceberg", "arctic"),
+            (r"volcano|lava|eruption", "volcano")]
+OBJ_KEYWORDS = [(r"beetle|insect|\bbug|ant\b|ants\b|bee\b|bees\b", "beetle"), (r"frog|toad", "frog"), (r"spider|web", "spider"), (r"\bcat|kitten|\bdog|animal|predator", "cat"),
+                (r"bird|fly|flies|wing", "bird"), (r"fish|shark|whale", "fish"), (r"hot|boil|degree|heat|temperature|warm|°", "thermometer"),
+                (r"chemic|liquid|mix|enzyme|acid|react|experiment|lab", "flask"), (r"explo|blast|bang|shoot|fire[sd]?\b|spray|burst|cannon", "explosion"),
+                (r"second|fast|speed|quick|time|minute|hour|instant", "stopwatch"), (r"heart|love|blood", "heart"), (r"brain|smart|think|mind|memory|intelligen", "brain"),
+                (r"idea|light|invent|discover|clever|solution", "lightbulb"), (r"money|coin|cost|price|rich|dollar|\$", "coin"), (r"burn|flame|ignite|fire", "fire"),
+                (r"water|rain|drop|liquid|sweat", "drop"), (r"atom|energy|particle|molecule|physics", "atom"), (r"machine|engine|gear|mechanic|design|system", "gear"),
+                (r"search|find|found|study|scientist|research|look", "magnifier"), (r"danger|warning|deadly|toxic|poison|risk|safe", "warning"),
+                (r"why|mystery|secret|unknown|question|how", "question"), (r"lightning|electric|shock|power|volt", "bolt")]
+
+
+def infer_objects(text):
+    t = text.lower(); out = []
+    for pat, name in OBJ_KEYWORDS:
+        if re.search(pat, t) and name not in out:
+            out.append(name)
+    return out[:2]
 
 
 def make_spec(seg, i):
+    say = seg.get("say", "")
+    objs = [o for o in (seg.get("objects") or []) if o in OBJECTS][:3]
     scene = str(seg.get("scene", "")).strip().lower()
     if scene not in SCENES:
-        scene = next((v for k, v in KEYWORDS if re.search(k, seg.get("say", "").lower())), "abstract")
-    extras = [e for e in (seg.get("extras") or []) if e in EXTRAS][:3]
+        scene = next((v for k, v in KEYWORDS if re.search(k, say.lower())), "")
+    if not scene:
+        scene = ["stage_nature", "stage_lab", "stage_warm", "stage_dark", "stage_bright"][i % 5]
+    if not objs and scene.startswith("stage_"):
+        objs = infer_objects(say) or ["question"]
+    extras = [e for e in (seg.get("extras") or []) if e in EXTRAS][:2]
     cam = seg.get("camera") if seg.get("camera") in CAMERAS else CAMERAS[i % 6]
     txt = re.sub(r"[^\w\s,.%$°/+!?-]", "", str(seg.get("big_text", ""))).upper().strip()[:16]
     sky, sky_to, els = build(scene)
+    have = {n for n, _ in els}
+    if objs:
+        els.append(("objects", {"names": objs}))
     for e in extras:
-        if e == "sun": els.append(("sun", {}))
-        elif e == "person": els.append(("person", {"x0": 0.15, "x1": 0.8, "action": "walk"}))
-        elif e in ("snow", "rain", "birds", "moon", "stars", "clouds", "fish", "planet", "lightning", "embers"):
+        if e in have or e in ("shake",):
+            continue
+        if e == "person":
+            els.append(("person", {"x0": 0.15, "x1": 0.8, "action": "walk"}))
+        elif e in ("sun", "snow", "rain", "birds", "moon", "stars", "clouds", "fish", "planet", "lightning", "embers"):
             els.append((e, {}))
-    return {"scene": scene, "sky": sky, "sky_to": sky_to, "els": els, "cam": cam, "text": txt, "shake": "shake" in extras, "idx": i}
+        have.add(e)
+    return {"scene": scene, "sky": sky, "sky_to": sky_to, "els": els, "cam": cam, "text": txt, "shake": "shake" in extras, "idx": i, "objs": objs}
 
 
 def camera(name, p, t, shake):
