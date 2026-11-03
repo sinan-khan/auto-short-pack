@@ -19,7 +19,7 @@ FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 PROMPT = """You write scripts for faceless 35-45 second animated YouTube Shorts telling a surprising TRUE story or fact.
 {topic_rule}
 Avoid these topics already used: {used}
-Each sentence is shown as an ANIMATED SCENE chosen from a fixed library. Return ONLY JSON:
+Each sentence is shown as an ANIMATED SCENE built from a fixed library, so choose visuals that LITERALLY show the sentence. Return ONLY JSON:
 {{"topic": "short topic name",
  "title": "YouTube title under 70 chars",
  "description": "2 short sentences",
@@ -28,23 +28,29 @@ Each sentence is shown as an ANIMATED SCENE chosen from a fixed library. Return 
  "segments": [
   {{"say": "one spoken sentence, max 14 words, no emojis",
     "scene": "ONE of: {scenes}",
+    "objects": ["1-3 of: {objects}"],
     "extras": ["0-2 of: {extras}"],
     "camera": "ONE of: {cameras}",
-    "big_text": "optional key number or word shown huge, max 12 chars, e.g. 8,848 M (empty string if none)"}}
+    "big_text": "optional key number or word shown huge, max 12 chars, e.g. 100°C (empty string if none)"}}
  ]}}
 Rules: 9 to 12 segments, 90-115 spoken words in total. Segment 1 is a hook with the strangest fact first;
 the last segment is a twist that makes people share. Real, well documented facts only; no invented numbers.
-Pick the scene that best matches what the sentence says (a climb story: climb, summit, mountain_storm, mountain_night;
-ocean story: ocean_day, underwater; space story: space, earth_space, rocket_launch). Vary scene and camera between segments
-but keep the story's world consistent. Use big_text for the most surprising number in about half of the segments."""
+HOW TO PICK VISUALS: most segments should use a stage_* scene (stage_nature, stage_lab, stage_warm, stage_dark, stage_bright)
+plus 1-3 'objects' that show what the sentence is about (an animal sentence -> that animal; heat -> thermometer or fire;
+chemicals -> flask; speed -> stopwatch; a blast -> explosion; a clever idea -> lightbulb). Use a world scene (mountains, ocean,
+space, city, forest, desert, volcano, climb...) ONLY when the story is really set in that place, and then usually leave objects empty.
+Never use a scene that does not match the story (no mountains for an insect story). Vary the stage and camera between segments.
+Use big_text for the most surprising number in about half of the segments."""
 
-SAMPLE = {"topic": "Mount Everest", "title": "Everest test", "description": "Test.", "hashtags": ["#shorts"],
+SAMPLE = {"topic": "Bombardier beetle", "title": "The beetle that shoots boiling acid", "description": "Test.", "hashtags": ["#shorts"],
  "facts_to_verify": [], "segments": [
- {"say": "Imagine a mountain so tall that planes could almost touch it.", "scene": "mountain_day", "extras": ["birds"], "camera": "tilt_up", "big_text": ""},
- {"say": "Mount Everest rises about eight thousand eight hundred forty eight metres.", "scene": "mountain_sunset", "extras": [], "camera": "zoom_in", "big_text": "8,848 M"},
- {"say": "Climbers call the top the death zone, because there is very little oxygen.", "scene": "climb", "extras": ["snow"], "camera": "pan_right", "big_text": "DEATH ZONE"},
- {"say": "Storms can arrive in minutes and freeze everything.", "scene": "mountain_storm", "extras": ["shake"], "camera": "zoom_out", "big_text": ""},
- {"say": "And yet every year, hundreds of people stand on top.", "scene": "summit", "extras": [], "camera": "zoom_in", "big_text": ""}]}
+ {"say": "This tiny beetle can shoot boiling liquid from its body.", "scene": "stage_nature", "objects": ["beetle"], "extras": [], "camera": "zoom_in", "big_text": ""},
+ {"say": "The spray is almost one hundred degrees Celsius.", "scene": "stage_warm", "objects": ["thermometer"], "extras": [], "camera": "none", "big_text": "100°C"},
+ {"say": "Inside its body, two chemicals are kept apart until danger arrives.", "scene": "stage_lab", "objects": ["flask"], "extras": [], "camera": "pan_right", "big_text": ""},
+ {"say": "When they mix, enzymes make them explode into hot spray.", "scene": "stage_dark", "objects": ["explosion"], "extras": ["shake"], "camera": "zoom_in", "big_text": ""},
+ {"say": "It repeats this about five hundred times every second.", "scene": "stage_bright", "objects": ["stopwatch"], "extras": [], "camera": "zoom_out", "big_text": "500/SEC"},
+ {"say": "Frogs and spiders learn quickly not to attack it.", "scene": "stage_nature", "objects": ["frog", "spider"], "extras": [], "camera": "pan_left", "big_text": ""},
+ {"say": "Scientists study its design to build safer engines.", "scene": "stage_lab", "objects": ["magnifier", "gear"], "extras": [], "camera": "none", "big_text": ""}]}
 
 
 def _extract_json(txt):
@@ -132,7 +138,7 @@ def llm():
             "Pick ONE topic yourself from this random category: " + random.choice(
                 ["animals", "the human body", "space", "history", "ocean", "insects", "physics", "food science", "plants", "geology"]) +
             ". Choose something surprising that most people do not know.")
-    prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none", scenes=", ".join(anim.SCENES),
+    prompt = PROMPT.format(topic_rule=rule, used=", ".join(used_topics()) or "none", scenes=", ".join(anim.SCENES), objects=", ".join(anim.OBJECTS),
                            extras=", ".join(anim.EXTRAS), cameras=", ".join(anim.CAMERAS))
     env = os.environ.get
     attempts = []
@@ -300,7 +306,7 @@ def main():
         "-filter_complex",
         f"[2:a]volume=0.10,afade=t=in:d=0.8,afade=t=out:st={fade:.2f}:d=1[m];[1:a][m]amix=inputs=2:duration=first:dropout_transition=0,"
         "volume=2,loudnorm=I=-14:TP=-1.5[a]",
-        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.2f}", str(OUT / "short.mp4")])
+        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-t", f"{total:.2f}", str(OUT / "short.mp4")])
 
     tags = " ".join(data.get("hashtags", ["#shorts"]))
     (OUT / "upload_info.txt").write_text(
