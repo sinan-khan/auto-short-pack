@@ -1,6 +1,9 @@
 name: make-short
 
 on:
+  schedule:
+    # 5 runs a day (UTC). Pakistan time (UTC+5): 06:17, 11:17, 16:17, 21:17, 02:17
+    - cron: "17 1,6,11,16,21 * * *"
   workflow_dispatch:
     inputs:
       topic:
@@ -12,12 +15,15 @@ on:
 
 permissions:
   contents: write
-  models: read
+
+concurrency:
+  group: make-short
+  cancel-in-progress: false
 
 jobs:
   make:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,21 +39,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           TOPIC: ${{ inputs.topic }}
           VOICE: ${{ inputs.voice }}
         run: python make_short.py
-      - uses: actions/upload-artifact@v4
+      - name: Keep a copy on GitHub (14 days)
+        uses: actions/upload-artifact@v4
         with:
-          name: short
+          name: short-${{ github.run_number }}
+          retention-days: 14
           path: |
             out/short.mp4
             out/upload_info.txt
+      - name: Upload to Google Drive
+        env:
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        run: python upload_drive.py
       - name: Remember the topic
+        if: always()
         run: |
           git config user.name "github-actions"
           git config user.email "actions@users.noreply.github.com"
           git add topics.txt
           git commit -m "topic used" || true
+          git pull --rebase || true
           git push || true
